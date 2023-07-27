@@ -1,28 +1,124 @@
 ---
-- name: Update web servers
-  hosts: webservers
-  remote_user: root
-
+- hosts: all
   tasks:
-  - name: Ensure apache is at the latest version
-    ansible.builtin.yum:
-      name: httpd
-      state: latest
-  - name: Write the apache config file
-    ansible.builtin.template:
-      src: /srv/httpd.j2
-      dest: /etc/httpd.conf
 
-- name: Update db servers
-  hosts: databases
-  remote_user: root
+      # -----------------------------------------------------------------------
 
-  tasks:
-  - name: Ensure postgresql is at the latest version
-    ansible.builtin.yum:
-      name: postgresql
-      state: latest
-  - name: Ensure that postgresql is started
-    ansible.builtin.service:
-      name: postgresql
-      state: started
+    - name: Abort if the host is not booted from the Arch install media
+      fail:
+        msg: "This host is not booted from the Arch install media!"
+      when: ansible_nodename != 'archiso'
+      tags:
+        - quick_exit
+
+      # -----------------------------------------------------------------------
+
+    - name: Prepare disk
+      block:
+
+        - name: Check firmware
+          block:
+          - name: Check existance of `/sys/firmware/efi/efivars` directory
+            ansible.builtin.stat:
+              path: /sys/firmware/efi/efivars
+            register: efivars
+          - ansible.builtin.set_fact:
+              firmware: "{{ efivars.stat.exists | ternary('uefi', 'bios') }}"
+          - ansible.builtin.set_fact:
+              efi_partition_number: "{{ (firmware == 'uefi') | ternary('1', None) }}"
+              boot_partition_number: "{{ (firmware == 'uefi') | ternary('2', '1') }}"
+              root_partition_number: "{{ (firmware == 'uefi') | ternary('3', '2') }}"
+
+        # - name: Partition the disk
+        #   block:
+        #   - name: Wipe install drive and all its partitions
+        #     command: find /dev -wholename "{{ install_drive }}*" -exec wipefs --force --all {} \;
+        #   - name: UEFI
+        #     when: firmware == 'uefi'
+        #     block:
+        #     - name: UEFI - Create EFI partition
+        #       parted:
+        #         device: "{{ install_drive }}"
+        #         label: gpt
+        #         number: "{{ efi_partition_number }}"
+        #         part_end: 512MB
+        #         name: EFI
+        #         flags: [boot, esp]
+        #         fs_type: fat32
+        #         state: present
+        #     - name: UEFI - Create boot partition
+        #       parted:
+        #         device: "{{ install_drive }}"
+        #         label: gpt
+        #         number: "{{ boot_partition_number }}"
+        #         part_start: 512MB
+        #         part_end: 1024MB
+        #         name: boot
+        #         fs_type: ext4
+        #         state: present
+        #     - name: UEFI - Create root partition
+        #       parted:
+        #         device: '{{ install_drive }}'
+        #         label: gpt
+        #         number: "{{ root_partition_number }}"
+        #         part_start: 1024MB
+        #         name: root
+        #         flags: [lvm]
+        #         state: present
+        #   - name: BIOS
+        #     when: firmware == 'bios'
+        #     block:
+        #     - name: BIOS - Create boot partition
+        #       parted:
+        #         device: "{{ install_drive }}"
+        #         label: msdos
+        #         number: "{{ boot_partition_number }}"
+        #         part_end: 512MB
+        #         #name: boot
+        #         fs_type: ext4
+        #         flags: [boot]
+        #         state: present
+        #     - name: BIOS - Create root partition
+        #       parted:
+        #         device: "{{ install_drive }}"
+        #         label: msdos
+        #         number: "{{ root_partition_number }}"
+        #         part_start: 512MB
+        #         #name: root
+        #         flags: [lvm]
+        #         state: present
+
+      # -----------------------------------------------------------------------
+
+
+
+# dell
+# devices.sda.removable: "0"
+# devices.sda.rotational: "1"
+# devices.sda.support_discard: "0"
+#
+# mac
+# devices.sda.removable: "0"
+# devices.sda.rotational: "0"
+# devices.sda.support_discard: "512"
+
+        # - name: Create boot partition
+        #   parted:
+        #     device: '{{ install_drive }}'
+        #     label: gpt
+        #     number: 1
+        #     part_end: 512MB
+        #     name: boot
+        #     flags: [boot, esp]
+        #     state: present
+        # - name: Create root partition
+        #   parted:
+        #     device: '{{ install_drive }}'
+        #     label: gpt
+        #     number: 2
+        #     part_start: 512MB
+        #     name: root
+        #     flags: [lvm]
+        #     state: present
+      tags:
+        - prepare_disk

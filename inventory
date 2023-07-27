@@ -1,26 +1,4 @@
-BIOS:
+pcs:
   hosts:
     xps:
-      ansible_host: {IP}
-      target_disk: /dev/sda
-      target_disk_is_ssd: false
-      target_disk_erase: false
-      processor_brand: intel
-      swap_size_in_gb: 4
-  vars:
-    boot_partition: 1
-    root_partition: 2
-UEFI:
-  hosts:
     macbook:
-      ansible_host: {IP}
-      target_disk: /dev/sda
-      target_disk_is_ssd: true
-      target_disk_erase: false
-      processor_brand: intel
-      swap_size_in_gb: 4
-  vars:
-    efi_partition: 1
-    boot_partition: 2
-    root_partition: 3
-

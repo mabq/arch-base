@@ -12,7 +12,9 @@ The `ansible` package is not part of the *Live Environment*, so you will need a 
 
     This is only a provisional password that will allow us to run the Ansible script on the managed node.
 
-2. Run the script:
+2. Connect via ssh at least once to add the fingerprint to the `~/.ssh/known_hosts` file.
+
+3. Run the script:
 
     Before running the script, check for any erros:
 
@@ -23,7 +25,9 @@ The `ansible` package is not part of the *Live Environment*, so you will need a 
     If everything is ok, run the script:
 
     ```bash
-    ansible-playbook local.yml -u root -k
+    ansible-playbook local.yml -k
     ```
 
     You will be prompted to enter the password of the `root` user (the one you setup in the previous step).
+
+

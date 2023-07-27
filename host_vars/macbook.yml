@@ -1,0 +1,3 @@
+---
+ansible_host: 192.168.100.24
+#install_drive: /dev/nvme0n1
