@@ -25,7 +25,9 @@ The `ansible` package is not part of the *Live Environment*, so you will need a 
     If everything is ok, run the script:
 
     ```bash
-    ansible-playbook local.yml -k
+    ansible-playbook local.yml -k --ask-vault-pass
+    # or
+    ansible-playbook local.yml -k --vault-password-file {FILE}
     ```
 
     You will be prompted to enter the password of the `root` user (the one you setup in the previous step).

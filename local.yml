@@ -5,90 +5,316 @@
       # -----------------------------------------------------------------------
 
     - name: Abort if the host is not booted from the Arch install media
-      fail:
-        msg: "This host is not booted from the Arch install media!"
+      tags: abort
       when: ansible_nodename != 'archiso'
-      tags:
-        - quick_exit
+      ansible.builtin.fail:
+        msg: "This host is not booted from the Arch install media!"
+
+      # -----------------------------------------------------------------------
+      
+    - name: Set variables
+      tags: variables
+      block:
+
+      - name: Set `firmware`
+        block:
+        - name: Check the `efivars` directory
+          ansible.builtin.stat:
+            path: /sys/firmware/efi/efivars
+          register: efivars
+        - name: Set `firmware`
+          ansible.builtin.set_fact:
+            firmware: "{{ efivars.stat.exists | ternary('uefi', 'bios') }}"
+
+      - name: Set 'device_name'
+        # For example:
+        #   if install_drive is: `/dev/sda`, device_name will be: `sda`
+        #   if install_drive is: `/dev/nvme0n1`, device_name will be: `nvme0n1`
+        # see: https://wiki.archlinux.org/title/Device_file#Block_devices
+        ansible.builtin.set_fact:
+          device_name: "{{ install_drive | split('/') | last }}"
+
+      - name: Set 'discard_support'
+        # I don't have a PC with an nvme drive to test this now,
+        # this should be false because nvme has built in support 
+        # for TRIM. Check this again whenever you have the oportunity.
+        ansible.builtin.set_fact:
+          discard_support: "{{ ansible_devices[device_name]['support_discard'] != '0' }}"
+
+      - name: Set 'partition_number' variables
+        block:
+        - name: Set numbers of partitions
+          ansible.builtin.set_fact:
+            efi_partition_number: "{{ (firmware == 'uefi') | ternary('1', None) }}"
+            boot_partition_number: "{{ (firmware == 'uefi') | ternary('2', '1') }}"
+            root_partition_number: "{{ (firmware == 'uefi') | ternary('3', '2') }}"
+        - name: Add the `p` prefix when needed
+          when: device_name | regex_search('[0-9]$')
+          # For drives whose device name ends with a number, the drive name and partition number is separated with the letter "p"
+          # see: https://wiki.archlinux.org/title/Device_file#Partition
+          ansible.builtin.set_fact:
+            efi_partition_number: "p{{ efi_partition_number }}"
+            boot_partition_number: "p{{ boot_partition_number }}"
+            root_partition_number: "p{{ root_partition_number }}"
+
+      - name: Set 'processor'
+        ansible.builtin.set_fact:
+          processor: "{{ item is search('AuthenticAMD') | ternary('amd', 'intel')}}"
+        when: item is search('AuthenticAMD') or item is search('GenuineIntel') 
+        loop: "{{ ansible_facts.processor }}"
+
 
       # -----------------------------------------------------------------------
 
     - name: Prepare disk
+      tags: prepare_disk
       block:
 
-        - name: Check firmware
-          block:
-          - name: Check existance of `/sys/firmware/efi/efivars` directory
-            ansible.builtin.stat:
-              path: /sys/firmware/efi/efivars
-            register: efivars
-          - ansible.builtin.set_fact:
-              firmware: "{{ efivars.stat.exists | ternary('uefi', 'bios') }}"
-          - ansible.builtin.set_fact:
-              efi_partition_number: "{{ (firmware == 'uefi') | ternary('1', None) }}"
-              boot_partition_number: "{{ (firmware == 'uefi') | ternary('2', '1') }}"
-              root_partition_number: "{{ (firmware == 'uefi') | ternary('3', '2') }}"
+      - name: Wipe install drive and all its partitions
+        ansible.builtin.command: find /dev -wholename "{{ install_drive }}*" -exec wipefs --force --all {} \;
 
-        # - name: Partition the disk
-        #   block:
-        #   - name: Wipe install drive and all its partitions
-        #     command: find /dev -wholename "{{ install_drive }}*" -exec wipefs --force --all {} \;
-        #   - name: UEFI
-        #     when: firmware == 'uefi'
-        #     block:
-        #     - name: UEFI - Create EFI partition
-        #       parted:
-        #         device: "{{ install_drive }}"
-        #         label: gpt
-        #         number: "{{ efi_partition_number }}"
-        #         part_end: 512MB
-        #         name: EFI
-        #         flags: [boot, esp]
-        #         fs_type: fat32
-        #         state: present
-        #     - name: UEFI - Create boot partition
-        #       parted:
-        #         device: "{{ install_drive }}"
-        #         label: gpt
-        #         number: "{{ boot_partition_number }}"
-        #         part_start: 512MB
-        #         part_end: 1024MB
-        #         name: boot
-        #         fs_type: ext4
-        #         state: present
-        #     - name: UEFI - Create root partition
-        #       parted:
-        #         device: '{{ install_drive }}'
-        #         label: gpt
-        #         number: "{{ root_partition_number }}"
-        #         part_start: 1024MB
-        #         name: root
-        #         flags: [lvm]
-        #         state: present
-        #   - name: BIOS
-        #     when: firmware == 'bios'
-        #     block:
-        #     - name: BIOS - Create boot partition
-        #       parted:
-        #         device: "{{ install_drive }}"
-        #         label: msdos
-        #         number: "{{ boot_partition_number }}"
-        #         part_end: 512MB
-        #         #name: boot
-        #         fs_type: ext4
-        #         flags: [boot]
-        #         state: present
-        #     - name: BIOS - Create root partition
-        #       parted:
-        #         device: "{{ install_drive }}"
-        #         label: msdos
-        #         number: "{{ root_partition_number }}"
-        #         part_start: 512MB
-        #         #name: root
-        #         flags: [lvm]
-        #         state: present
+      - name: Securely overwrite the entire this with random data
+        when: overwrite_disk_with_random_data
+        ansible.builtin.command: dd if=/dev/urandom of={{ install_drive }}
+
+      - name: Partition the disk
+        block:
+        - name: Create UEFI paritition layout
+          when: firmware == 'uefi'
+          block:
+          - name: Create the EFI partition (UEFI)
+            community.general.parted:
+              device: "{{ install_drive }}"
+              label: gpt
+              number: "{{ efi_partition_number }}"
+              part_end: 512MB
+              name: EFI
+              flags: [boot, esp]
+              fs_type: fat32
+              state: present
+          - name: Create the boot partition (UEFI)
+            community.general.parted:
+              device: "{{ install_drive }}"
+              label: gpt
+              number: "{{ boot_partition_number }}"
+              part_start: 512MB
+              part_end: 1024MB
+              name: boot
+              fs_type: ext4
+              state: present
+          - name: Create the root partition (UEFI)
+            community.general.parted:
+              device: '{{ install_drive }}'
+              label: gpt
+              number: "{{ root_partition_number }}"
+              part_start: 1024MB
+              name: root
+              flags: [lvm]
+              state: present
+        - name: Create BIOS partition layout
+          when: firmware == 'bios'
+          block:
+          - name: Create the boot partition (BIOS)
+            community.general.parted:
+              device: "{{ install_drive }}"
+              label: msdos
+              number: "{{ boot_partition_number }}"
+              part_end: 512MB
+              #name: boot
+              fs_type: ext4
+              flags: [boot]
+              state: present
+          - name: Create the root partition (BIOS)
+            community.general.parted:
+              device: "{{ install_drive }}"
+              label: msdos
+              number: "{{ root_partition_number }}"
+              part_start: 512MB
+              #name: root
+              flags: [lvm]
+              state: present
+
+      - name: Format the EFI (UEFI only) and boot partitions
+        block:
+        - name: Format EFI partition (UEFI)
+          when: firmware == 'uefi'
+          community.general.filesystem:
+            dev: "{{ install_drive }}{{ efi_partition_number }}"
+            fstype: vfat
+            opts: '-F32'
+        - name: Format boot partition
+          community.general.filesystem:
+            dev: "{{ install_drive }}{{ boot_partition_number }}"
+            fstype: ext4
+
+      - name: Encrypt the root partition
+        community.crypto.luks_device:
+          device: "{{ install_drive }}{{ root_partition_number }}"
+          type: luks2
+          new_passphrase: "{{ encryption_password }}"
+          state: opened
+          name: crypt
+          passphrase: "{{ encryption_password }}"
+
+      - name: Setup the Logical Volumes (LVM)
+        block:
+        - name: Create the volume group (the physical volume is automatically created)
+          community.general.lvg:
+            pvs: /dev/mapper/crypt
+            vg: vg0
+            pvresize: true
+            state: active
+        - name: Create the 'root' logical volume
+          community.general.lvol:
+            vg: vg0
+            lv: root
+            size: 32G
+            active: true
+        - name: Create the 'home' logical volume
+          community.general.lvol:
+            vg: vg0
+            lv: home
+            size: +100%FREE
+            active: true
+        - name: Format `root` logical volume
+          community.general.filesystem:
+            dev: /dev/vg0/root
+            fstype: ext4
+        - name: Format `home` logical volume
+          community.general.filesystem:
+            dev: /dev/vg0/home
+            fstype: ext4
+
+      - name: Mount
+        block:
+        - name: Mount root
+          ansible.posix.mount:
+            src: /dev/vg0/root
+            path: /mnt
+            fstype: ext4
+            state: mounted
+        - name: Mount home
+          block:
+          - name: Create the '/home' directory
+            ansible.builtin.file:
+              path: /mnt/home
+              state: directory
+          - name: Mount home
+            ansible.posix.mount:
+              src: /dev/vg0/home
+              path: /mnt/home
+              fstype: ext4
+              state: mounted
+        - name: Mount boot
+          block:
+          - name: Create the '/boot' directory
+            ansible.builtin.file:
+              path: /mnt/boot
+              state: directory
+          - name: Mount boot
+            ansible.posix.mount:
+              src: "{{ install_drive }}{{ boot_partition_number }}"
+              path: /mnt/boot
+              fstype: ext4
+              state: mounted
+
+      - name: Generate and configure the `/etc/fstab` file
+        block:
+        - name: Create the '/etc' directory
+          ansible.builtin.file:
+            path: /mnt/etc
+            state: directory
+        - name: Generate the `fstab` file
+          ansible.builtin.shell:
+            cmd: genfstab -U -p /mnt >> /mnt/etc/fstab
+        - name: Enable TRIM support for capable disks
+          when: discard_support
+          ansible.builtin.replace:
+            path: /mnt/etc/fstab
+            regexp: '(relatime)\s+'
+            replace: '\1,discard\t'
 
       # -----------------------------------------------------------------------
+
+    - name: Install packages
+      tags: packages
+      block:
+
+      - name: Install essential packages
+        ansible.builtin.command: pacstrap /mnt base base-devel linux linux-headers linux-lts linux-lts-headers linux-firmware lvm2 grub os-prober networkmanager openssh neovim git dosfstools mtools python ansible
+
+      - name: Install `efibootmgr` (UEFI only)
+        when: firmware == 'uefi'
+        ansible.builtin.command: pacstrap /mnt efibootmgr
+
+      - name: Install microcode updates
+        block:
+        - name: Install 'amd' microcode updates
+          when: processor == 'amd'
+          ansible.builtin.command: pacstrap /mnt amd-ucode
+        - name: Install 'intel' microcode updates
+          when: processor == 'intel'
+          ansible.builtin.command: pacstrap /mnt intel-ucode
+
+      # -----------------------------------------------------------------------
+      # Hasta aquí me quede! 🔥
+      # -----------------------------------------------------------------------
+
+    - name: Configure the system
+      tags: configure
+      block:
+
+      - name: Enable services
+        ansible.builtin.command: arch-chroot /mnt systemctl enable sshd NetworkManager
+
+      - name: Setup console keymap
+        ansible.builtin.command: arch-chroot /mnt echo KEYMAP=us > /etc/vconsole.conf
+
+      - name: Setup time
+        block:
+        - name: Set the time zone
+          ansible.builtin.command: arch-chroot /mnt ln -sf /usr/share/zoneinfo/America/Guayaquil /etc/localtime
+        - name: Set the hardware clock to the current system time
+          ansible.builtin.command: arch-chroot /mnt hwclock --systohc
+
+      - name: Setup the locales
+        block:
+        - name: Configure locale.gen
+          lineinfile:
+            dest: /mnt/etc/locale.gen
+            regexp: '{{ item.regex }}'
+            line: '{{ item.line }}'
+          loop:
+            - {regex: en_US\.UTF-8 UTF-8, line: en_US.UTF-8 UTF-8}
+            - {regex: es_EC\.UTF-8 UTF-8, line: es_EC.UTF-8 UTF-8}
+        - name: Generate the locales
+          ansible.builtin.command: arch-chroot /mnt locale-gen
+        - name: Create locale.conf
+          ansible.builtin.copy:
+            content: "LANG=en_US.UTF-8"
+            dest: /mnt/etc/locale.conf
+
+      - name: Set hostname
+        ansible.builtin.copy:
+          content: '{{ inventory_hostname }}'
+          dest: /mnt/etc/hostname
+
+      - name: Configure mkinitcpio
+        block:
+        - name: Add luks key
+          block:
+          - name: Create the key file
+            ansible.builtin.shell: dd bs=512 count=4 if=/dev/urandom of=/mnt/crypto_keyfile.bin
+          - name: Generate the content of the key
+            ansible.builtin.command: "echo '{{ encryption_password }}' | cryptsetup luksAddKey '{{ install_drive }}{{ root_partition_number }}' /mnt/crypto_keyfile.bin -"
+          - name: Remove all permissions from key file
+            ansible.builtin.command: chmod 000 /mnt/crypto_keyfile.bin
+
+
+      # -----------------------------------------------------------------------
+     
+        # - name: Change root into the work-in-progress installation
+        #   ansible.builtin.command: arch-chroot /mnt
 
 
 
@@ -102,23 +328,3 @@
 # devices.sda.rotational: "0"
 # devices.sda.support_discard: "512"
 
-        # - name: Create boot partition
-        #   parted:
-        #     device: '{{ install_drive }}'
-        #     label: gpt
-        #     number: 1
-        #     part_end: 512MB
-        #     name: boot
-        #     flags: [boot, esp]
-        #     state: present
-        # - name: Create root partition
-        #   parted:
-        #     device: '{{ install_drive }}'
-        #     label: gpt
-        #     number: 2
-        #     part_start: 512MB
-        #     name: root
-        #     flags: [lvm]
-        #     state: present
-      tags:
-        - prepare_disk
