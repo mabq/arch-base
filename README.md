@@ -9,8 +9,7 @@ The script should work with any BIOS/UEFI system with an Intel/AMD processor and
 
 ## Before running the script
 
-Review the script (`local.yml`) and the default variable values (`/group_vars/all.yml`). 
-Default values are stored in `/group_vars/all.yml`, overwrite any variable value in each host file (`/host_vars/{host}.yml`).
+Review the script (`local.yml`) and the default variable values (`/group_vars/all.yml`). Overwrite any variable value in each host file (`/host_vars/{host}.yml`).
 
 Change the values of the variables `encryption_password` and `root_password`. To encrypt a string using ansible use the following command:
 
