@@ -1,4 +1,4 @@
-# Arch base install with Ansible
+# Install Archlinux with Ansible
 
 The goal of this repository is to have an ansible script that automates the installation of a base Archlinux system. Once the base system is in place the remaining configurations can be done with `ansible-pull` and other repos.
 
