@@ -1,5 +1,5 @@
 ---
-#ansible_user: root
+ansible_user: root
 
 # do not check the `~/.ssh/known_hosts` file
 ansible_ssh_common_args: -o "StrictHostKeyChecking no" -o "UserKnownHostsFile /dev/null"

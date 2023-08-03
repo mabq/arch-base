@@ -258,7 +258,8 @@
       block:
 
       - name: Install essential packages
-        ansible.builtin.command: pacstrap /mnt base base-devel linux linux-headers linux-lts linux-lts-headers linux-firmware lvm2 grub os-prober networkmanager openssh neovim git dosfstools mtools python ansible
+        # install both versions of the linux kernel, if there is a problem with the latest version you will still be able to boot with the lts version
+        ansible.builtin.command: pacstrap /mnt base base-devel linux linux-headers linux-lts linux-lts-headers linux-firmware lvm2 grub os-prober networkmanager openssh neovim git dosfstools mtools ansible
 
       - name: Install `efibootmgr` (UEFI only)
         when: firmware == 'uefi'
@@ -432,8 +433,11 @@
       # -----------------------------------------------------------------------
       
       - name: That's it
-        tags: shutdown
-        community.general.shutdown:
+        tags: reboot
+        ansible.builtin.reboot:
+          connect_timeout: 1
+          reboot_timeout: 1
+        failed_when: false
           
       # -----------------------------------------------------------------------
 
