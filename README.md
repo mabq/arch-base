@@ -39,9 +39,9 @@ ansible-vault encrypt_string --vault-password-file {PATH_TO_FILE_WITH_ENCRYPTION
 
     Either way, you will be prompted for the `root` user password of the managed node (the one you set in the previous step).
 
-3. Turn the computer back on:
+3. Connect to internet:
 
-    Once the script completes the computer will be automatically turned off. Remove the usb drive with the ISO image and turn it on.
+    Once the script completes the computer will automatically reboot.
 
-    Use the `nmtui` command to connect to a wireless network if needed. For more information see the learning notes repo.
+    Use the `nmtui` command to connect to a wireless network if needed.
 
