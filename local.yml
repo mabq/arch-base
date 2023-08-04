@@ -29,25 +29,25 @@
           ansible.builtin.debug:
             msg: "firmware = {{ firmware }}"
 
-      - name: Set 'device_name'
+      - name: Set 'short_device_name'
         block:
           # For example:
           #   if install_block_device_name is: `/dev/sda`, short_device_name will be: `sda`
           #   if install_block_device_name is: `/dev/nvme0n1`, short_device_name will be: `nvme0n1`
           # see: https://wiki.archlinux.org/title/Device_file#Block_devices
-        - name: Set 'device name'
+        - name: Set 'short_device_name'
           ansible.builtin.set_fact:
-            device_name: "{{ install_block_device_name | split('/') | last }}"
+            short_device_name: "{{ install_block_device_name | split('/') | last }}"
         - name: Print
           ansible.builtin.debug:
-            msg: "device_name = {{ short_device_name }}"
+            msg: "short_device_name = {{ short_device_name }}"
 
       - name: Set 'discard_support'
         block:
         # I don't have a PC with an nvme drive to test this now, this should be false because nvme has built in support for TRIM. Check this again whenever you have the oportunity.
         - name: Set 'discard_support'
           ansible.builtin.set_fact:
-          discard_support: "{{ ansible_devices[device_name]['support_discard'] != '0' }}"
+            discard_support: "{{ ansible_devices[short_device_name]['support_discard'] != '0' }}"
         - name: Print
           ansible.builtin.debug:
             msg: "discard_support = {{ discard_support }}"

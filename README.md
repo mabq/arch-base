@@ -1,6 +1,6 @@
-# Install Archlinux with Ansible
+# Basic Archlinux installation with Ansible
 
-The goal of this repository is to have an ansible script that automates the installation of a base Archlinux system. Once the base system is in place the remaining configurations can be done with `ansible-pull` and other repos.
+The goal of this repository is to have an ansible script that automates the process of a basic Archlinux installation. Once the base system is in place the remaining configurations can be done with `ansible-pull` and other repos.
 
 > The `ansible` package is not part of the *Live Environment*, so you will need a second machine with `ansible` installed to act as the control node.
 
