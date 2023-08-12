@@ -1,4 +1,4 @@
-pcs:
+workstation:
   hosts:
     xps:
     macbook:

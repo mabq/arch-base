@@ -257,14 +257,42 @@
       tags: packages
       block:
 
-      - name: Install essential packages
+      - name: Install the base system (Archlinux core packages)
+        ansible.builtin.command: pacstrap /mnt base
+
+      - name: Install kernels (and kernel related packages)
         # install both versions of the linux kernel, if there is a problem with the latest version you will still be able to boot with the lts version
-        ansible.builtin.command: pacstrap /mnt base base-devel linux linux-headers linux-lts linux-lts-headers linux-firmware lvm2 grub os-prober networkmanager openssh neovim git dosfstools mtools ansible
+        ansible.builtin.command: pacstrap /mnt linux linux-headers linux-lts linux-lts-headers linux-firmware lvm2 grub os-prober
+
+      - name: Install lvm
+        # required now to be able to boot
+        ansible.builtin.command: pacstrap /mnt lvm2
+
+      - name: Install GRUB packages
+        ansible.builtin.command: pacstrap /mnt grub os-prober
+
+      - name: Install network packages
+        ansible.builtin.command: pacstrap /mnt networkmanager openssh
+
+      - name: Install a text editor (neovim)
+        ansible.builtin.command: pacstrap /mnt neovim
+
+      - name: Install a terminal multiplexer
+        ansible.builtin.command: pacstrap /mnt tmux
+
+      - name: Install Ansible
+        # required now to be able to run `ansible-pull` later
+        ansible.builtin.command: pacstrap /mnt ansible
+
+      # - name: Install ...
+      #   # Do I really need to install these packages now?
+      #   ansible.builtin.command: pacstrap /mnt base-devel git dosfstools mtools
 
       - name: Install `efibootmgr` (UEFI only)
         when: firmware == 'uefi'
         ansible.builtin.command: pacstrap /mnt efibootmgr
 
+      # Shoulf I do this later, in the other repo?
       - name: Install microcode updates
         block:
         - name: Install 'amd' microcode updates
