@@ -149,6 +149,7 @@
         vg: vg0
         pvresize: true
         state: active
+
     - name: lvm - create 'root' logical volume
       community.general.lvol:
         vg: vg0
@@ -212,34 +213,20 @@
 
     # --- Install
 
-    - name: install `base` and `base-devel`
-      ansible.builtin.command: pacstrap /mnt base base-devel
+    - name: install system packages
+      ansible.builtin.command: pacstrap /mnt base linux linux-lts linux-firmware lvm2 grub
 
-    - name: install linux kernels (latest and lts versions)
-      # install both versions of the linux kernel, if there is a problem with the latest version you will still be able to boot with the lts version
-      ansible.builtin.command: pacstrap /mnt linux linux-headers linux-lts linux-lts-headers linux-firmware
-
-    - name: install lvm
-      # required now to be able to boot
-      ansible.builtin.command: pacstrap /mnt lvm2
-
-    - name: install GRUB packages
-      ansible.builtin.command: pacstrap /mnt grub os-prober
-
-    - name: install networkmanager, openssh
-      ansible.builtin.command: pacstrap /mnt networkmanager openssh
-
-    - name: install neovim, tmux, ansible
-      ansible.builtin.command: pacstrap /mnt neovim tmux ansible git
-
-    - name: (UEFI) - install `efibootmgr`
+    - name: UEFI - install `efibootmgr`
       when: firmware == 'uefi'
       ansible.builtin.command: pacstrap /mnt efibootmgr
 
-    - name: install 'amd' microcode updates
+    - name: install basic utilities
+      ansible.builtin.command: pacstrap /mnt networkmanager openssh neovim tmux ansible
+
+    - name: AMD - install microcode updates
       when: processor == 'amd'
       ansible.builtin.command: pacstrap /mnt amd-ucode
-    - name: install 'intel' microcode updates
+    - name: Intel - install  microcode updates
       when: processor == 'intel'
       ansible.builtin.command: pacstrap /mnt intel-ucode
 
@@ -305,9 +292,9 @@
       loop:
         - { regex: ^FILES, line: FILES=(/crypto_keyfile.bin) }
         - { regex: ^HOOKS, line: HOOKS=(base udev autodetect modconf kms keyboard keymap consolefont block encrypt lvm2 filesystems fsck) }
-    - name: mkinitcpio - create initial ramdisk image for `linux`
+    - name: mkinitcpio - generate the initial ramdisk image for `linux`
       ansible.builtin.command: arch-chroot /mnt mkinitcpio -p linux
-    - name: mkinitcpio - create initial ramdisk image for `linux-lts`
+    - name: mkinitcpio - generate the initial ramdisk image for `linux-lts`
       ansible.builtin.command: arch-chroot /mnt mkinitcpio -p linux-lts
 
     - name: root - generate password hash

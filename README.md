@@ -15,15 +15,22 @@ The playbook in [ansible-setup](https://github.com/mabq/ansible-setup) can be ex
 ## About this script
 
    - Executes only if the managed node was booted from the Arch installation image (super important to avoid running it by accident and possibly lose all data on inventory hosts).
+   - Securly erase disk before installation (skip by default, only do this if you have a good reason, it takes several hours to complete --- see `/group_vars/all.yml`).
    - Detects firmware type and creates partitions accordingly.
-   - Detects disk type and enables TRIM if supported.
-   - Detects processor and installs microcode updates.
-   - Sets up [LVM](https://wiki.archlinux.org/title/LVM) on top of [LUKS](https://wiki.archlinux.org/title/Dm-crypt/Encrypting_an_entire_system#LVM_on_LUKS) for full disk encryption. Automatically generates a key file so you won't need to type the encryption password at boot).
-   - Installs the latest and lts versions of linux kernels (in case you ever face any issues with the latest version)
-   - Installs and enables opehssh and NetworkManager.
-   - Installs tmux, neovim and ansible.
-   - Performs basic configurations like time zone, locales, hostname, etc. (edit timezone and locales manually on `local.yml` if needed)
-   - Sets up swap of the desired size (if desired, see `group_vars`)
+   - Encrypts the root partition using [LUKS](https://wiki.archlinux.org/title/Dm-crypt/Encrypting_an_entire_system#LVM_on_LUKS) and configures two [LVM](https://wiki.archlinux.org/title/LVM) logical volumes (on it), one for `/` and one for `/home`.
+   - Installs the following packages:
+     - System packages: `base`, `linux`, `linux-lts`, `linux-firmware`, `lvm2`, `grub` and `efibootmgr` (UEFI only).
+     - Basic utilities: `networkmanager`, `openssh`, `neovim`, `tmux` and `ansible` (leaving the host to run [ansible-setup](https://github.com/mabq/ansible-setup)).
+     - Microcode updates: `amd-ucode` or `intel-ucode`.
+   - Performs basic configurations:
+     - Detects disk type and enables TRIM if supported.
+     - Enables `sshd` and `NetworkManager` services.
+     - Sets the console keymap to `us` (change manually in `local.yml` if needed).
+     - Generates locales for `en_US` (default) and `es_EC` (change manually in `local.yml` if needed).
+     - Sets the `hostname` (with the name assigned in `/hosts`).
+     - Generate the initramfs (initial RAM file system) for both kernels (`linux` and `linux-lts`). Automatically adds a key file so you won't need to type the encryption password during the boot process.
+     - Configures grub as the boot loader.
+     - Optionally sets up swap file of the desired size (see `group_vars`)
 
 
 ## Before running the script
