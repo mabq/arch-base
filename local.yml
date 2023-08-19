@@ -247,6 +247,16 @@
         regexp: '(relatime)\s+'
         replace: '\1,discard\t'
 
+    - name: root - generate password hash
+      ansible.builtin.command: openssl passwd -6 "{{ password }}"
+      register: passwd_hash
+    - name: root - manually edit `/etc/shadow` to change password
+      # apparently for security reasons neither `ansible.builtin.user` or `ansible.builtin.shell` modules will let you change the root password. Doing it manually by editing `/etc/shadow`.
+      ansible.builtin.replace:
+        path: /mnt/etc/shadow
+        regexp: (^root):([^:]*):(.*)
+        replace: \1:{{ passwd_hash.stdout }}:\3
+
     - name: enable sshd and NetworkManager
       ansible.builtin.command: arch-chroot /mnt systemctl enable sshd NetworkManager
 
@@ -259,17 +269,14 @@
       ansible.builtin.command: arch-chroot /mnt hwclock --systohc
 
     - name: enable locales
-      tags: locales
       lineinfile:
         dest: /mnt/etc/locale.gen
         regexp: '#{{ item }}\.UTF-8 UTF-8'
         line: '{{ item }}.UTF-8 UTF-8'
       loop: '{{ locales }}'
     - name: generate locales
-      tags: locales
       ansible.builtin.command: arch-chroot /mnt locale-gen
     - name: set default locale
-      tags: locales
       ansible.builtin.copy:
         content: LANG={{ locales | first }}.UTF-8
         dest: /mnt/etc/locale.conf
@@ -279,13 +286,13 @@
         content: '{{ inventory_hostname }}'
         dest: /mnt/etc/hostname
 
-    - name: mkinitcpio - create file to store key
+    - name: initramfs - create file to store key
       ansible.builtin.shell: arch-chroot /mnt dd bs=512 count=4 if=/dev/urandom of=/crypto_keyfile.bin
-    - name: mkinitcpio - populate file with key content
+    - name: initramfs - populate file with key content
       ansible.builtin.shell: echo "{{ password }}" | arch-chroot /mnt  cryptsetup luksAddKey {{ target_disk }}{{ root_partition_number }} /crypto_keyfile.bin -
-    - name: mkinitcpio - remove all permissions from key file
+    - name: initramfs - remove all permissions from key file
       ansible.builtin.command: arch-chroot /mnt chmod 000 /crypto_keyfile.bin
-    - name: mkinitcpio - enable keyfile, encryption and lvm
+    - name: initramfs - enable keyfile, encryption and lvm
       lineinfile:
         dest: /mnt/etc/mkinitcpio.conf
         regexp: '{{ item.regex }}'
@@ -293,23 +300,13 @@
       loop:
         - { regex: ^FILES, line: FILES=(/crypto_keyfile.bin) }
         - { regex: ^HOOKS, line: HOOKS=(base udev autodetect modconf kms keyboard keymap consolefont block encrypt lvm2 filesystems fsck) }
-    - name: mkinitcpio - generate the initial ramdisk image for `linux`
+    - name: initramfs - generate the initial ramdisk image for `linux`
       ansible.builtin.command: arch-chroot /mnt mkinitcpio -p linux
-    - name: mkinitcpio - generate the initial ramdisk image for `linux-lts`
+    - name: initramfs - generate the initial ramdisk image for `linux-lts`
       ansible.builtin.command: arch-chroot /mnt mkinitcpio -p linux-lts
 
-    - name: root - generate password hash
-      ansible.builtin.command: openssl passwd -6 "{{ password }}"
-      register: passwd_hash
-    - name: root - manually edit `/etc/shadow` to change password
-      # apparently for security reasons neither `ansible.builtin.user` or `ansible.builtin.shell` modules will let you change the root password. Doing it manually by editing `/etc/shadow`.
-      ansible.builtin.replace:
-        path: /mnt/etc/shadow
-        regexp: (^root):([^:]*):(.*)
-        replace: \1:{{ passwd_hash.stdout }}:\3
 
-
-    # --- grub
+    # --- grub bootloader
 
     - name: UEFI - create '/boot/EFI' directory
       when: firmware == 'uefi'
@@ -344,9 +341,6 @@
     - name: grub - generate boot loader file
       ansible.builtin.command: "arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg"
 
-
-    # --- Swap
-      
     - name: configure swap
       when: swap_size_in_mb > 0
       block:

@@ -7,15 +7,13 @@ I like Archlinux a lot but I don't want to manually redo everything time and aga
 
 ##### Why two different scrips?
 
-[Ansible](https://archlinux.org/packages/extra/any/ansible/) is not included in the Archlinux [installation image](https://archlinux.org/download/), so this playbook (`local.yml`) must be executed from a [controller node](https://docs.ansible.com/ansible/latest/getting_started/index.html#getting-started-with-ansible).
-
-The playbook in [ansible-setup](https://github.com/mabq/ansible-setup) can be executed locally with `ansible-pull` (more details on that repo).
+[Ansible](https://archlinux.org/packages/extra/any/ansible/) is not included in the Archlinux [installation image](https://archlinux.org/download/), so this playbook (`local.yml`) must be executed from a [controller node](https://docs.ansible.com/ansible/latest/getting_started/index.html#getting-started-with-ansible), on the other hand the playbook in [ansible-setup](https://github.com/mabq/ansible-setup) can be executed locally with `ansible-pull` (more details on that repo).
 
 
 ## About this script
 
    - Executes only if the managed node was booted from the Arch installation image (avoid accidental executions).
-   - Securly erase the disk before installation (`false` by default, if `true` the playbook will take several hours to complete).
+   - Securly erase the disk before installation (`false` by default, if enabled the playbook will take several hours to complete even on SSDs).
    - Detects firmware type and creates partitions accordingly.
    - Encrypts the root partition using [LUKS](https://wiki.archlinux.org/title/Dm-crypt/Encrypting_an_entire_system#LVM_on_LUKS) and configures two [LVM](https://wiki.archlinux.org/title/LVM) logical volumes (on top of it), one for `/` (32gb by default) and one for `/home` (remaining space).
    - Installs the following packages:
@@ -28,9 +26,9 @@ The playbook in [ansible-setup](https://github.com/mabq/ansible-setup) can be ex
      - Sets the console keymap (`us` by default).
      - Generates locales (`en_US` and `es_EC` by default).
      - Sets the `hostname` (with the name assigned in `/hosts`).
-     - Generate the initramfs (initial RAM file system) for both kernels (`linux` and `linux-lts`). Automatically adds a key file so you won't need to type the disk encryption password during the boot process.
+     - Generate the initial RAM filesystem for both kernels (`linux` and `linux-lts`). Automatically adds a key file so you won't need to type the disk encryption password during the boot process.
      - Configures grub as the boot loader.
-     - Optionally sets up a swap file of the desired size (see `group_vars`)
+     - Optionally sets up a swap file (4096mb by default).
 
 
 ## Before running the script
