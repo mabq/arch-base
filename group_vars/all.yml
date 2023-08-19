@@ -15,9 +15,8 @@ password: !vault |
 #     Do not edit these variable here!
 #     Overwrite them for any host in each `host_vars` file.
 target_disk: /dev/sda
-overwrite_disk_with_random_data: false    # will take hours!
+secure_erase_disk: false    # will take several hours to complete!
 swap_size_in_mb: 4096    # use 0 for no swap, or a multiple of 1024
-timezone: America/Guayaquil
 
 
 # --- Ansible config variables (ignore)

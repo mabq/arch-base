@@ -1,28 +1,29 @@
 # Basic Archlinux installation with Ansible
 
-I love Archlinux but I don't want to manually redo everything time and again. To fully automate my setup I created 2 ansible scripts:
+I like Archlinux a lot but I don't want to manually redo everything time and again. To fully automate my setup I created 2 ansible scripts:
 
-1. [ansible-archlinux](https://github.com/mabq/ansible-archlinux) (this repo) - fully automates a [basic Archlinux installation](https://wiki.archlinux.org/title/Installation_guide), leaving the machine ready to run the second script.
+1. [ansible-archlinux](https://github.com/mabq/ansible-archlinux) (this repo) - fully automates a [basic Archlinux installation](https://wiki.archlinux.org/title/Installation_guide), leaving the host ready to run the second script.
 2. [ansible-setup](https://github.com/mabq/ansible-setup) installs and configures all the tools I need.
 
 #### Why two different scrips?
 
-The [live environment](https://wiki.archlinux.org/title/Installation_guide#Boot_the_live_environment) you get with the [Archlinux installation image](https://archlinux.org/download/) does not include the [ansible](https://archlinux.org/packages/extra/any/ansible/) package, so this playbook (`local.yml`) must be executed from another machine (a [controller node](https://docs.ansible.com/ansible/latest/getting_started/index.html#getting-started-with-ansible), the machine where you are installing Archlinux becomed the managed node).
+[Ansible](https://archlinux.org/packages/extra/any/ansible/) is not included in the Archlinux [installation image](https://archlinux.org/download/), so this playbook (`local.yml`) must be executed from a [controller node](https://docs.ansible.com/ansible/latest/getting_started/index.html#getting-started-with-ansible).
 
-The [ansible-setup](https://github.com/mabq/ansible-setup) playbook on the other hand, can be executed with `ansible-pull` on that same machine (more details on that repo).
+The playbook in [ansible-setup](https://github.com/mabq/ansible-setup) can be executed locally with `ansible-pull` (more details on that repo).
 
 
 ## About this script
 
    - Executes only if the managed node was booted from the Arch installation image (super important to avoid running it by accident and possibly lose all data on inventory hosts).
    - Detects firmware type and creates partitions accordingly.
-   - Detects disk type and enables TRIM (if supported).
+   - Detects disk type and enables TRIM if supported.
    - Detects processor and installs microcode updates.
-   - Sets up [lvm](https://wiki.archlinux.org/title/LVM) on top of full disk encryption (generates a key file so you don't need to type the encryption password when booting).
-   - Installs basic packages (leave the node ready for [ansible-setup](https://github.com/mabq/ansible-setup)).
-   - Enables sshd and NetworkManages services.
-   - Sets up time zone, locales, hostname, etc.
-   - Sets up swap (if desired, see `group_vars`)
+   - Sets up [LVM](https://wiki.archlinux.org/title/LVM) on top of [LUKS](https://wiki.archlinux.org/title/Dm-crypt/Encrypting_an_entire_system#LVM_on_LUKS) for full disk encryption. Automatically generates a key file so you won't need to type the encryption password at boot).
+   - Installs the latest and lts versions of linux kernels (in case you ever face any issues with the latest version)
+   - Installs and enables opehssh and NetworkManager.
+   - Installs tmux, neovim and ansible.
+   - Performs basic configurations like time zone, locales, hostname, etc. (edit timezone and locales manually on `local.yml` if needed)
+   - Sets up swap of the desired size (if desired, see `group_vars`)
 
 
 ## Before running the script
@@ -87,6 +88,8 @@ ansible-playbook local.yml -k --vault-password-file ~/.vault_key
 ```
 
 You will be prompted for the root password you just changed.
+
+If no erros occur the managed node will shutdown automatically after install. Remove install media and turn it back on.
 
 
 ## Connect to internet
