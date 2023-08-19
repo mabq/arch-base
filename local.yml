@@ -375,8 +375,10 @@
 
     # --- That's it
       
-    - ansible.builtin.reboot:
-      reboot_timeout: 300
+    - name: That's it - shutting down managed node
+      community.general.shutdown:
+        msg: "Installation succesful, shutting down..."
 
-  post_tasks:
-    - meta: end_play
+    - name: That's it - exit playbook gracefully
+      ansible.builtin.meta: end_host
+

@@ -49,11 +49,13 @@ The [ansible-setup](https://github.com/mabq/ansible-setup) playbook on the other
 
 - Review `/hosts`:
 
-    Make sure the name of the host you intend to affect is listed. That name will become the `hostname` of the managed node.
+    Make sure the name of the host you intend to affect is listed on the `/hosts` file.
 
-- Change the `password`:
+    Make sure the variable `ansible-host` in `/host_vars/{hostname}.yml` is pointing to the right ip address.
 
-    The same password wil be used for disk encryption and for the root user --- make sure you use a long random password, you will almost never need to type it manually and it must be secure.
+- Change the `password` in `/group_vars/all.yml` (if needed):
+
+    That password wil be used for disk encryption and for the root user --- make sure you use a long random password, you will almost never need to type it manually and it must be secure.
 
     Because this repo is public you must encrypt the value of the password with an encryption-password --- also make sure you use a long, random password. To avoid mistyping the password store it on a file with the following command:
 
@@ -69,11 +71,11 @@ The [ansible-setup](https://github.com/mabq/ansible-setup) playbook on the other
 
     Copy the output and replace the `password` variable value in `/group_vars/all.yml`.
 
-- Check default variables:
-
-    Do not change the values on `/group_vars/all.yml`, overwrite them on each `/host_vars/{host}.yml` file.
+- Check default variables in `/group_vars/all.yml`:
 
     Specially check `target_disk`, you may be using a nvme disk. Use `fdisk -l` to identify the target disk.
+
+    Do not change the default values on `/group_vars/all.yml`, overwrite them by including them on `/host_vars/{hostname}.yml`.
 
 
 ## Run the script
