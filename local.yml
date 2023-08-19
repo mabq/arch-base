@@ -231,7 +231,7 @@
       ansible.builtin.command: pacstrap /mnt intel-ucode
 
 
-    # --- Configure
+    # --- general configurations
 
     - name: fstab - create '/etc' directory
       ansible.builtin.file:
@@ -286,6 +286,8 @@
         content: '{{ inventory_hostname }}'
         dest: /mnt/etc/hostname
 
+    # initial ram filesystem configuration
+
     - name: initramfs - create file to store key
       ansible.builtin.shell: arch-chroot /mnt dd bs=512 count=4 if=/dev/urandom of=/crypto_keyfile.bin
     - name: initramfs - populate file with key content
@@ -305,8 +307,7 @@
     - name: initramfs - generate the initial ramdisk image for `linux-lts`
       ansible.builtin.command: arch-chroot /mnt mkinitcpio -p linux-lts
 
-
-    # --- grub bootloader
+    # --- bootloader configuration
 
     - name: UEFI - create '/boot/EFI' directory
       when: firmware == 'uefi'
@@ -341,6 +342,8 @@
     - name: grub - generate boot loader file
       ansible.builtin.command: "arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg"
 
+    # --- swap configuration
+
     - name: configure swap
       when: swap_size_in_mb > 0
       block:
@@ -359,10 +362,9 @@
       - name: swap - enable
         ansible.builtin.command: arch-chroot /mnt swapon -a
 
-
-    # --- That's it
+    # --- reboot and exit playbook
       
-    - name: done!, shutting down managed node...
+    - name: shutdown
       community.general.shutdown:
 
     - name: exit playbook gracefully
