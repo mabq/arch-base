@@ -16,8 +16,13 @@ password: !vault |
 #     Overwrite them for any host in each `host_vars` file.
 target_disk: /dev/sda
 secure_erase_disk: false    # will take several hours to complete!
-swap_size_in_mb: 4096    # use 0 for no swap, or a multiple of 1024
-
+root_size_in_gb: 32G    # replace with any size you want
+swap_size_in_mb: 4096    # use 0 for no swap or a multiple of 1024
+console_keymap: us    # https://wiki.archlinux.org/title/Linux_console/Keyboard_configuration
+timezone: 'America/Guayaquil'
+locales:   # the first one is the default one
+  - en_US
+  - es_EC
 
 # --- Ansible config variables (ignore)
 ansible_user: root    # execute the playbook as root

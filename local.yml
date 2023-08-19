@@ -154,7 +154,7 @@
       community.general.lvol:
         vg: vg0
         lv: root
-        size: 32G
+        size: "{{ root_size_in_gb }}"
         active: true
     - name: lvm - create 'home' logical volume
       community.general.lvol:
@@ -251,26 +251,27 @@
       ansible.builtin.command: arch-chroot /mnt systemctl enable sshd NetworkManager
 
     - name: setup console keymap
-      ansible.builtin.command: arch-chroot /mnt echo KEYMAP=us > /etc/vconsole.conf
+      ansible.builtin.command: arch-chroot /mnt echo KEYMAP={{ console_keymap }} > /etc/vconsole.conf
 
     - name: set time zone
-      ansible.builtin.command: arch-chroot /mnt ln -sf /usr/share/zoneinfo/America/Guayaquil /etc/localtime
+      ansible.builtin.command: arch-chroot /mnt ln -sf /usr/share/zoneinfo/{{ timezone }} /etc/localtime
     - name: set hardware clock to current system time
       ansible.builtin.command: arch-chroot /mnt hwclock --systohc
 
-    - name: enable locales (languages)
+    - name: enable locales
+      tags: locales
       lineinfile:
         dest: /mnt/etc/locale.gen
-        regexp: '{{ item.regex }}'
-        line: '{{ item.line }}'
-      loop:
-        - {regex: en_US\.UTF-8 UTF-8, line: en_US.UTF-8 UTF-8}
-        - {regex: es_EC\.UTF-8 UTF-8, line: es_EC.UTF-8 UTF-8}
+        regexp: '#{{ item }}\.UTF-8 UTF-8'
+        line: '{{ item }}.UTF-8 UTF-8'
+      loop: '{{ locales }}'
     - name: generate locales
+      tags: locales
       ansible.builtin.command: arch-chroot /mnt locale-gen
     - name: set default locale
+      tags: locales
       ansible.builtin.copy:
-        content: "LANG=en_US.UTF-8"
+        content: LANG={{ locales | first }}.UTF-8
         dest: /mnt/etc/locale.conf
 
     - name: setup hostname

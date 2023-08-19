@@ -15,9 +15,9 @@ The playbook in [ansible-setup](https://github.com/mabq/ansible-setup) can be ex
 ## About this script
 
    - Executes only if the managed node was booted from the Arch installation image (avoid accidental executions).
-   - Securly erase the disk before installation (skip by default, only do this if you have a good reason, it takes several hours to complete --- see `/group_vars/all.yml`).
+   - Securly erase the disk before installation (`false` by default, if `true` the playbook will take several hours to complete).
    - Detects firmware type and creates partitions accordingly.
-   - Encrypts the root partition using [LUKS](https://wiki.archlinux.org/title/Dm-crypt/Encrypting_an_entire_system#LVM_on_LUKS) and configures two [LVM](https://wiki.archlinux.org/title/LVM) logical volumes (on top of it), one for `/` and one for `/home`.
+   - Encrypts the root partition using [LUKS](https://wiki.archlinux.org/title/Dm-crypt/Encrypting_an_entire_system#LVM_on_LUKS) and configures two [LVM](https://wiki.archlinux.org/title/LVM) logical volumes (on top of it), one for `/` (32gb by default) and one for `/home` (remaining space).
    - Installs the following packages:
      - System packages: `base`, `linux`, `linux-lts`, `linux-firmware`, `lvm2`, `grub` and `efibootmgr` (UEFI only).
      - Basic utilities: `networkmanager`, `openssh`, `neovim`, `tmux` and `ansible` (leaving the host ready to run [ansible-setup](https://github.com/mabq/ansible-setup)).
@@ -25,8 +25,8 @@ The playbook in [ansible-setup](https://github.com/mabq/ansible-setup) can be ex
    - Performs basic configurations:
      - Detects disk type and enables TRIM if supported.
      - Enables `sshd` and `NetworkManager` services.
-     - Sets the console keymap to `us` (change manually in `local.yml` if needed).
-     - Generates locales for `en_US` (default) and `es_EC` (change manually in `local.yml` if needed).
+     - Sets the console keymap (`us` by default).
+     - Generates locales (`en_US` and `es_EC` by default).
      - Sets the `hostname` (with the name assigned in `/hosts`).
      - Generate the initramfs (initial RAM file system) for both kernels (`linux` and `linux-lts`). Automatically adds a key file so you won't need to type the disk encryption password during the boot process.
      - Configures grub as the boot loader.
