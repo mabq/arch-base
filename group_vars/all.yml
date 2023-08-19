@@ -1,29 +1,14 @@
 ---
-ansible_user: root
+# ansible configurations
+ansible_user: root    # execute the playbook as root
+ansible_ssh_common_args: -o "StrictHostKeyChecking no" -o "UserKnownHostsFile /dev/null"    # avoid checking `~/.ssh/known_hosts` file every time we run the playbook
 
-# do not check the `~/.ssh/known_hosts` file
-ansible_ssh_common_args: -o "StrictHostKeyChecking no" -o "UserKnownHostsFile /dev/null"
-
-install_block_device_name: /dev/sda
-
+# default values --- can be overwritten in `host_vars`
+target_disk: /dev/sda
 overwrite_disk_with_random_data: false
-
-# Use 0 for no swap, otherwise use a number multiple of 1024mb
-swap_size_in_mb: 4096
-
-# CHANGE THIS WITH YOUR OWN! (see README.md)
-disk_password: !vault |
-          $ANSIBLE_VAULT;1.1;AES256
-          35316236336539333131626330333635313463656262353930396437656239656432353638653039
-          3234623934373037306138393930313765356263363636640a613134396635653966376263623964
-          34343734663237663265646134386662623662386239346465323635646635633363666136643361
-          3535653834393461380a613666643337666235313535306562333735363535303333663235636437
-          65383334653065613962303630623663356137363266316539336462396266356539383663343031
-          39353761386432363066633162353834653035396164363439373436333233363364373733636236
-          393331323035383965653134303466343065
-
-# CHANGE THIS WITH YOUR OWN! (see README.md)
-root_password: !vault |
+swap_size_in_mb: 4096    # use 0 for no swap, otherwise a number multiple of 1024
+  # (this password is used for both; disk encryption and root)
+password: !vault |
           $ANSIBLE_VAULT;1.1;AES256
           35316236336539333131626330333635313463656262353930396437656239656432353638653039
           3234623934373037306138393930313765356263363636640a613134396635653966376263623964

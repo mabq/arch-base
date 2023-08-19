@@ -1,4 +1,6 @@
-workstation:
-  hosts:
-    xps:
-    macbook:
+[workstation]
+xsp
+macbook
+
+[server]
+
