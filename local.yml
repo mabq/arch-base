@@ -4,7 +4,7 @@
 
     # --- Check live environment
 
-    - name: Abort if the host is not booted from the Arch install media
+    - name: check live environment
       tags: abort
       when: ansible_nodename != 'archiso'
       ansible.builtin.fail:
@@ -13,17 +13,17 @@
 
     # --- Set variables
 
-    - name: Check `efivars` directory existance
+    - name: variables - check `efivars` directory existance
       ansible.builtin.stat:
         path: /sys/firmware/efi/efivars
       register: efivars
-    - name: Get `firmware`
+    - name: varisbles - set `firmware`
       ansible.builtin.set_fact:
         firmware: "{{ efivars.stat.exists | ternary('uefi', 'bios') }}"
     - ansible.builtin.debug:
         msg: "firmware = {{ firmware }}"
 
-    - name: Get 'disk_name'
+    - name: variables - set 'disk_name'
       # if target_disk is: `/dev/sda`, disk_name will be: `sda`
       # if target_disk is: `/dev/nvme0n1`, disk_name will be: `nvme0n1`
       # see: https://wiki.archlinux.org/title/Device_file#Block_devices
@@ -32,19 +32,19 @@
     - ansible.builtin.debug:
         msg: "disk_name = {{ disk_name }}"
 
-    - name: Get 'disk_discard_support'
+    - name: variables - set 'disk_discard_support'
       # I don't have a PC with an nvme drive to test this now. For nvme disks this should be false because nvme has built in support for TRIM. Check this again whenever you have the oportunity.
       ansible.builtin.set_fact:
         disk_discard_support: "{{ ansible_devices[disk_name]['support_discard'] != '0' }}"
     - ansible.builtin.debug:
         msg: "disk_discard_support = {{ disk_discard_support }}"
 
-    - name: Assign numbers to partition variables depending on the firmware
+    - name: variables - assign numbers to partition variables depending on firmware
       ansible.builtin.set_fact:
         efi_partition_number: "{{ (firmware == 'uefi') | ternary('1', None) }}"
         boot_partition_number: "{{ (firmware == 'uefi') | ternary('2', '1') }}"
         root_partition_number: "{{ (firmware == 'uefi') | ternary('3', '2') }}"
-    - name: For disk names that end with a number, add the "p" prefix to the partition numbers
+    - name: variables - add the "p" prefix to partition names (for disk names that end with a number)
       # See `https://wiki.archlinux.org/title/Device_file#Partition`
       when: disk_name | regex_search('[0-9]$')
       ansible.builtin.set_fact:
@@ -54,29 +54,28 @@
     - ansible.builtin.debug:
         msg: "efi_partition_number = {{ efi_partition_number }}, boot_partition_number = {{ boot_partition_number }}, root_partition_number = {{ root_partition_number }}"
 
-    - name: Get 'processor'
+    - name: variables - set 'processor'
       ansible.builtin.set_fact:
         processor: "{{ item is search('AuthenticAMD') | ternary('amd', 'intel')}}"
       when: item is search('AuthenticAMD') or item is search('GenuineIntel') 
       loop: "{{ ansible_facts.processor }}"
-    - name: Print `processor`
-      ansible.builtin.debug:
+    - ansible.builtin.debug:
         msg: "processor = {{ processor }}"
 
 
     # --- Prepare disk
 
-    - name: Wipe target disk and all its partitions
+    - name: disk - wipe partitions
       ansible.builtin.command: find /dev -wholename "{{ target_disk }}*" -exec wipefs --force --all {} \;
 
-    - name: Securely overwrite the entire disk with random data
+    - name: disk - write random data
       when: overwrite_disk_with_random_data
       ansible.builtin.command: dd if=/dev/urandom of={{ target_disk }}
 
-    - name: UEFI - create partitions
+    - name: disk (UEFI) - create partitions
       when: firmware == 'uefi'
       block:
-      - name: UEFI - create EFI partition
+      - name: disk (UEFI) - create EFI partition
         community.general.parted:
           device: "{{ target_disk }}"
           label: gpt
@@ -86,7 +85,7 @@
           flags: [boot, esp]
           fs_type: fat32
           state: present
-      - name: UEFI - create boot partition
+      - name: disk (UEFI) - create boot partition
         community.general.parted:
           device: "{{ target_disk }}"
           label: gpt
@@ -96,7 +95,7 @@
           name: boot
           fs_type: ext4
           state: present
-      - name: UEFI - create root partition
+      - name: disk (UEFI) - create root partition
         community.general.parted:
           device: '{{ target_disk }}'
           label: gpt
@@ -106,10 +105,10 @@
           flags: [lvm]
           state: present
 
-    - name: BIOS - create partitions
+    - name: disk (BIOS) - create partitions
       when: firmware == 'bios'
       block:
-      - name: BIOS - create boot partition
+      - name: disk (BIOS) - create boot partition
         community.general.parted:
           device: "{{ target_disk }}"
           label: msdos
@@ -119,7 +118,7 @@
           fs_type: ext4
           flags: [boot]
           state: present
-      - name: BIOS - create root partition
+      - name: disk (BIOS) - create root partition
         community.general.parted:
           device: "{{ target_disk }}"
           label: msdos
@@ -129,7 +128,7 @@
           flags: [lvm]
           state: present
 
-    - name: Encrypt root partition
+    - name: disk - encrypt root partition
       community.crypto.luks_device:
         device: "{{ target_disk }}{{ root_partition_number }}"
         type: luks2
@@ -138,85 +137,71 @@
         name: crypt
         passphrase: "{{ password }}"
 
-    - name: LVM - create volume group (physical volume is automatically created)
+    - name: disk | lvm - create volume group (physical volume is automatically created)
       community.general.lvg:
         pvs: /dev/mapper/crypt
         vg: vg0
         pvresize: true
         state: active
-    - name: LVM - create 'root' logical volume
+    - name: disk | lvm - create 'root' logical volume
       community.general.lvol:
         vg: vg0
         lv: root
         size: 32G
         active: true
-    - name: LVM - create 'home' logical volume
+    - name: disk | lvm - create 'home' logical volume
       community.general.lvol:
         vg: vg0
         lv: home
         size: +100%FREE
         active: true
 
-    - name: Format EFI partition (UEFI)
+    - name: disk (UEFI) - format EFI partition
       when: firmware == 'uefi'
       community.general.filesystem:
         dev: "{{ target_disk }}{{ efi_partition_number }}"
         fstype: vfat
         opts: '-F32'
-    - name: Format boot partition
+    - name: disk - format boot partition
       community.general.filesystem:
         dev: "{{ target_disk }}{{ boot_partition_number }}"
         fstype: ext4
-    - name: Format `root` logical volume
+    - name: disk - format `root` logical volume
       community.general.filesystem:
         dev: /dev/vg0/root
         fstype: ext4
-    - name: Format `home` logical volume
+    - name: disk - format `home` logical volume
       community.general.filesystem:
         dev: /dev/vg0/home
         fstype: ext4
 
-    - name: Create directory for '/home'
+    - name: disk - create directory for '/home'
       ansible.builtin.file:
         path: /mnt/home
         state: directory
-    - name: Create directory for '/boot'
+    - name: disk - create directory for '/boot'
       ansible.builtin.file:
         path: /mnt/boot
         state: directory
 
-    - name: Mount root
+    - name: disk - mount root
       ansible.posix.mount:
         src: /dev/vg0/root
         path: /mnt
         fstype: ext4
         state: mounted
-    - name: Mount home
+    - name: disk - mount home
       ansible.posix.mount:
         src: /dev/vg0/home
         path: /mnt/home
         fstype: ext4
         state: mounted
-    - name: Mount boot
+    - name: disk - mount boot
       ansible.posix.mount:
         src: "{{ target_disk }}{{ boot_partition_number }}"
         path: /mnt/boot
         fstype: ext4
         state: mounted
-
-    - name: fstab - create '/etc' directory
-      ansible.builtin.file:
-        path: /mnt/etc
-        state: directory
-    - name: fstab - generate file
-      ansible.builtin.shell:
-        cmd: genfstab -U -p /mnt >> /mnt/etc/fstab
-    - name: fstab - enable TRIM support (if supported)
-      when: disk_discard_support
-      ansible.builtin.replace:
-        path: /mnt/etc/fstab
-        regexp: '(relatime)\s+'
-        replace: '\1,discard\t'
 
 
     # --- Install
@@ -255,18 +240,32 @@
 
     # --- Configure
 
-    - name: Enable services
+    - name: fstab - create '/etc' directory
+      ansible.builtin.file:
+        path: /mnt/etc
+        state: directory
+    - name: fstab - generate file
+      ansible.builtin.shell:
+        cmd: genfstab -U -p /mnt >> /mnt/etc/fstab
+    - name: fstab - enable TRIM support (if supported)
+      when: disk_discard_support
+      ansible.builtin.replace:
+        path: /mnt/etc/fstab
+        regexp: '(relatime)\s+'
+        replace: '\1,discard\t'
+
+    - name: enable sshd and NetworkManager
       ansible.builtin.command: arch-chroot /mnt systemctl enable sshd NetworkManager
 
-    - name: Setup console keymap
+    - name: setup console keymap
       ansible.builtin.command: arch-chroot /mnt echo KEYMAP=us > /etc/vconsole.conf
 
-    - name: Set time zone
+    - name: set time zone
       ansible.builtin.command: arch-chroot /mnt ln -sf /usr/share/zoneinfo/{{ timezone }} /etc/localtime
-    - name: Set hardware clock to current system time
+    - name: set hardware clock to current system time
       ansible.builtin.command: arch-chroot /mnt hwclock --systohc
 
-    - name: Enable locales (languages)
+    - name: enable locales (languages)
       lineinfile:
         dest: /mnt/etc/locale.gen
         regexp: '{{ item.regex }}'
@@ -274,14 +273,14 @@
       loop:
         - {regex: en_US\.UTF-8 UTF-8, line: en_US.UTF-8 UTF-8}
         - {regex: es_EC\.UTF-8 UTF-8, line: es_EC.UTF-8 UTF-8}
-    - name: Generate locales
+    - name: generate locales
       ansible.builtin.command: arch-chroot /mnt locale-gen
-    - name: Set default locale
+    - name: set default locale
       ansible.builtin.copy:
         content: "LANG=en_US.UTF-8"
         dest: /mnt/etc/locale.conf
 
-    - name: Setup hostname
+    - name: setup hostname
       ansible.builtin.copy:
         content: '{{ inventory_hostname }}'
         dest: /mnt/etc/hostname
