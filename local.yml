@@ -262,7 +262,7 @@
       ansible.builtin.command: arch-chroot /mnt echo KEYMAP=us > /etc/vconsole.conf
 
     - name: Set time zone
-      ansible.builtin.command: arch-chroot /mnt ln -sf /usr/share/zoneinfo/America/Guayaquil /etc/localtime
+      ansible.builtin.command: arch-chroot /mnt ln -sf /usr/share/zoneinfo/{{ timezone }} /etc/localtime
     - name: Set hardware clock to current system time
       ansible.builtin.command: arch-chroot /mnt hwclock --systohc
 

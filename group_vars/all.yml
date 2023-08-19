@@ -1,13 +1,5 @@
----
-# ansible configurations
-ansible_user: root    # execute the playbook as root
-ansible_ssh_common_args: -o "StrictHostKeyChecking no" -o "UserKnownHostsFile /dev/null"    # avoid checking `~/.ssh/known_hosts` file every time we run the playbook
-
-# default values --- can be overwritten in `host_vars`
-target_disk: /dev/sda
-overwrite_disk_with_random_data: false
-swap_size_in_mb: 4096    # use 0 for no swap, otherwise a number multiple of 1024
-  # (this password is used for both; disk encryption and root)
+# --- Encryption/root password
+#     See README.mf for instructions
 password: !vault |
           $ANSIBLE_VAULT;1.1;AES256
           35316236336539333131626330333635313463656262353930396437656239656432353638653039
@@ -17,4 +9,18 @@ password: !vault |
           65383334653065613962303630623663356137363266316539336462396266356539383663343031
           39353761386432363066633162353834653035396164363439373436333233363364373733636236
           393331323035383965653134303466343065
+
+
+# --- Default values 
+#     Do not edit these variable here!
+#     Overwrite them for any host in each `host_vars` file.
+target_disk: /dev/sda
+overwrite_disk_with_random_data: false    # will take hours!
+swap_size_in_mb: 4096    # use 0 for no swap, or a multiple of 1024
+timezone: America/Guayaquil
+
+
+# --- Ansible config variables (ignore)
+ansible_user: root    # execute the playbook as root
+ansible_ssh_common_args: -o "StrictHostKeyChecking no" -o "UserKnownHostsFile /dev/null"    # avoid errors for not having the IP of the managed node/s in the `~/.ssh/known_hosts` file
 
