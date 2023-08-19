@@ -23,6 +23,7 @@ timezone: 'America/Guayaquil'
 locales:   # the first one is the default one
   - en_US
   - es_EC
+  - ar_AE
 
 # --- Ansible config variables (ignore)
 ansible_user: root    # execute the playbook as root
