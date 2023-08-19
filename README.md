@@ -5,7 +5,7 @@ I like Archlinux a lot but I don't want to manually redo everything time and aga
 1. [ansible-archlinux](https://github.com/mabq/ansible-archlinux) (this repo) - fully automates a [basic Archlinux installation](https://wiki.archlinux.org/title/Installation_guide), leaving the host ready to run the second script.
 2. [ansible-setup](https://github.com/mabq/ansible-setup) installs and configures all the tools I need.
 
-#### Why two different scrips?
+##### Why two different scrips?
 
 [Ansible](https://archlinux.org/packages/extra/any/ansible/) is not included in the Archlinux [installation image](https://archlinux.org/download/), so this playbook (`local.yml`) must be executed from a [controller node](https://docs.ansible.com/ansible/latest/getting_started/index.html#getting-started-with-ansible).
 
@@ -14,13 +14,13 @@ The playbook in [ansible-setup](https://github.com/mabq/ansible-setup) can be ex
 
 ## About this script
 
-   - Executes only if the managed node was booted from the Arch installation image (super important to avoid running it by accident and possibly lose all data on inventory hosts).
-   - Securly erase disk before installation (skip by default, only do this if you have a good reason, it takes several hours to complete --- see `/group_vars/all.yml`).
+   - Executes only if the managed node was booted from the Arch installation image (avoid accidental executions).
+   - Securly erase the disk before installation (skip by default, only do this if you have a good reason, it takes several hours to complete --- see `/group_vars/all.yml`).
    - Detects firmware type and creates partitions accordingly.
-   - Encrypts the root partition using [LUKS](https://wiki.archlinux.org/title/Dm-crypt/Encrypting_an_entire_system#LVM_on_LUKS) and configures two [LVM](https://wiki.archlinux.org/title/LVM) logical volumes (on it), one for `/` and one for `/home`.
+   - Encrypts the root partition using [LUKS](https://wiki.archlinux.org/title/Dm-crypt/Encrypting_an_entire_system#LVM_on_LUKS) and configures two [LVM](https://wiki.archlinux.org/title/LVM) logical volumes (on top of it), one for `/` and one for `/home`.
    - Installs the following packages:
      - System packages: `base`, `linux`, `linux-lts`, `linux-firmware`, `lvm2`, `grub` and `efibootmgr` (UEFI only).
-     - Basic utilities: `networkmanager`, `openssh`, `neovim`, `tmux` and `ansible` (leaving the host to run [ansible-setup](https://github.com/mabq/ansible-setup)).
+     - Basic utilities: `networkmanager`, `openssh`, `neovim`, `tmux` and `ansible` (leaving the host ready to run [ansible-setup](https://github.com/mabq/ansible-setup)).
      - Microcode updates: `amd-ucode` or `intel-ucode`.
    - Performs basic configurations:
      - Detects disk type and enables TRIM if supported.
@@ -28,22 +28,21 @@ The playbook in [ansible-setup](https://github.com/mabq/ansible-setup) can be ex
      - Sets the console keymap to `us` (change manually in `local.yml` if needed).
      - Generates locales for `en_US` (default) and `es_EC` (change manually in `local.yml` if needed).
      - Sets the `hostname` (with the name assigned in `/hosts`).
-     - Generate the initramfs (initial RAM file system) for both kernels (`linux` and `linux-lts`). Automatically adds a key file so you won't need to type the encryption password during the boot process.
+     - Generate the initramfs (initial RAM file system) for both kernels (`linux` and `linux-lts`). Automatically adds a key file so you won't need to type the disk encryption password during the boot process.
      - Configures grub as the boot loader.
-     - Optionally sets up swap file of the desired size (see `group_vars`)
+     - Optionally sets up a swap file of the desired size (see `group_vars`)
 
 
 ## Before running the script
 
-- Change the password of the root user in the live environment (managed node):
+- Change the password of the root user in the managed node:
 
     ```bash
+    # use a simple password, its only temporary
     passwd
     ```
 
-    Use a simple password, its only temporary.
-
-- Annotate the IP address of the live environment (managed node):
+- Annotate the IP address of the managed node:
 
     ```bash
     ip a
@@ -61,17 +60,17 @@ The playbook in [ansible-setup](https://github.com/mabq/ansible-setup) can be ex
 
     Make sure the variable `ansible-host` in `/host_vars/{hostname}.yml` is pointing to the right ip address.
 
-- Change the `password` in `/group_vars/all.yml` (if needed):
+- Change the value of the `password` variable in `/group_vars/all.yml` (if needed):
 
     That password wil be used for disk encryption and for the root user --- make sure you use a long random password, you will almost never need to type it manually and it must be secure.
 
-    Because this repo is public you must encrypt the value of the password with an encryption-password --- also make sure you use a long, random password. To avoid mistyping the password store it on a file with the following command:
+    Because this repo is public you must encrypt the value of the password with an encryption password --- also make sure you use a long, random encryption password. To avoid mistyping the password store it on a file with the following command:
 
     ```bash
-    echo "{password}" > ~/.vault_key; chmod 600 ~/.vault_key
+    echo "{encryption-password}" > ~/.vault_key; chmod 600 ~/.vault_key
     ```
 
-    Produce the encrypted value for the `password` variable:
+    Encrypt the password:
 
     ```bash
     ansible-vault encrypt_string '{password}' --vault-password-file ~/.vault_key --name 'password'`
@@ -83,7 +82,7 @@ The playbook in [ansible-setup](https://github.com/mabq/ansible-setup) can be ex
 
     Specially check `target_disk`, you may be using a nvme disk. Use `fdisk -l` to identify the target disk.
 
-    Do not change the default values on `/group_vars/all.yml`, overwrite them by including them on `/host_vars/{hostname}.yml`.
+    Do not change the default values in the `/group_vars/all.yml` file, overwrite them by including them on each `/host_vars/{hostname}.yml` file.
 
 
 ## Run the script
@@ -94,14 +93,9 @@ Change directory into the cloned repo and run:
 ansible-playbook local.yml -k --vault-password-file ~/.vault_key
 ```
 
-You will be prompted for the root password you just changed.
+You will be prompted for the root password of the managed node (the one you just changed).
 
 If no erros occur the managed node will shutdown automatically after install. Remove install media and turn it back on.
-
-
-## Connect to internet
-
-Once the script completes the computer will automatically reboot.
 
 Use the `nmtui` command to connect to a wireless network.
 
