@@ -46,6 +46,8 @@ I like Archlinux a lot but I don't want to manually redo everything time and aga
     ip a
     ```
 
+    Use `iwctl` if you need to connect to a wireless network.
+
 - Clone this repo on the controller node:
 
    ```bash
@@ -96,4 +98,6 @@ You will be prompted for the root password of the managed node (the one you just
 If no erros occur the managed node will shutdown automatically after install. Remove install media and turn it back on.
 
 Use the `nmtui` command to connect to a wireless network.
+
+**Note**: You won't be able to login via SSH yet because password login for the root user is disabled by default.
 
