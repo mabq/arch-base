@@ -62,7 +62,7 @@ I like Archlinux a lot but I don't want to manually redo everything time and aga
 
 - Change the value of the `password` variable in `/group_vars/all.yml` (if needed):
 
-    That password wil be used for disk encryption and for the root user --- make sure you use a long random password, you will almost never need to type it manually and it must be secure.
+    That password will be used for disk encryption and for the root user --- make sure you use a long random password, you will almost never need to type it manually and it must be secure.
 
     Because this repo is public you must encrypt the value of the password with an encryption password --- also make sure you use a long, random encryption password. To avoid mistyping the password store it on a file with the following command:
 
@@ -80,9 +80,9 @@ I like Archlinux a lot but I don't want to manually redo everything time and aga
 
 - Check default variables in `/group_vars/all.yml`:
 
-    Specially check `target_disk`, you may be using a nvme disk. Use `fdisk -l` to identify the target disk.
+    > Do not change the default values in the `/group_vars/all.yml` file, overwrite them by including them on each `/host_vars/{hostname}.yml` file.
 
-    Do not change the default values in the `/group_vars/all.yml` file, overwrite them by including them on each `/host_vars/{hostname}.yml` file.
+    Specially check `target_disk`, you may be using a nvme disk. Use `fdisk -l` to identify the target disk.
 
 
 ## Run the script
