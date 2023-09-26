@@ -7,7 +7,7 @@ I like Archlinux a lot but I don't want to manually redo everything time and aga
 
 ##### Why two different scrips?
 
-[Ansible](https://archlinux.org/packages/extra/any/ansible/) is not included in the Archlinux [installation image](https://archlinux.org/download/), so this playbook (`local.yml`) must be executed from a [controller node](https://docs.ansible.com/ansible/latest/getting_started/index.html#getting-started-with-ansible), on the other hand the playbook in [ansible-setup](https://github.com/mabq/ansible-setup) can be executed locally with `ansible-pull` (more details on that repo).
+[Ansible](https://archlinux.org/packages/extra/any/ansible/) is not included in the Archlinux [installation image](https://archlinux.org/download/), so this playbook (`local.yml`) must be executed from a [controller node](https://docs.ansible.com/ansible/latest/getting_started/index.html#getting-started-with-ansible). The playbook in [ansible-setup](https://github.com/mabq/ansible-setup) can be executed locally with `ansible-pull`, more details on that repo.
 
 
 ## About this script
@@ -33,14 +33,16 @@ I like Archlinux a lot but I don't want to manually redo everything time and aga
 
 ## Before running the script
 
-- Change the password of the root user in the managed node:
+On the managed node (where you want to install Archlinux):
+
+- Change the password of the root user:
 
     ```bash
     # use a simple password, its only temporary
     passwd
     ```
 
-- Annotate the IP address of the managed node:
+- Check the ip address:
 
     ```bash
     ip a
@@ -48,7 +50,9 @@ I like Archlinux a lot but I don't want to manually redo everything time and aga
 
     Use `iwctl` if you need to connect to a wireless network.
 
-- Clone this repo on the controller node:
+On the controller node:
+
+- Clone this repo:
 
    ```bash
    git clone git@github.com:mabq/ansible-archlinux.git

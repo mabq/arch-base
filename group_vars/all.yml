@@ -8,7 +8,6 @@ password: !vault |
           3335323535356433330a346137643239353635333330343634643236643438313338393634626664
           6436
 
-
 # --- Default values 
 #     Do not edit these variable here!
 #     Overwrite them for any host in each `host_vars` file.
