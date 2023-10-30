@@ -279,7 +279,7 @@
         line: '{{ item.line }}'
       loop:
         - { regex: ^FILES, line: FILES=(/crypto_keyfile.bin) }
-        - { regex: ^HOOKS, line: HOOKS=(base udev autodetect modconf kms keyboard keymap consolefont numlock block encrypt lvm2 filesystems fsck) }
+        - { regex: ^HOOKS, line: HOOKS=(base udev autodetect modconf kms keyboard keymap consolefont block encrypt lvm2 filesystems fsck) }
     - name: initramfs - Generate the initial ramdisk image for `linux`
       ansible.builtin.command: arch-chroot /mnt mkinitcpio -p linux
     - name: initramfs - Generate the initial ramdisk image for `linux-lts`
