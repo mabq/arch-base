@@ -239,7 +239,7 @@
     - name: Change root password
       ansible.builtin.user:
         name: root
-        password: {{ password | password_hash('sha512') }}
+        password: "{{ password | password_hash('sha512') }}"
 
     - name: Enable sshd and NetworkManager
       ansible.builtin.command: arch-chroot /mnt systemctl enable sshd NetworkManager
