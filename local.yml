@@ -226,20 +226,15 @@
         regexp: '(relatime)\s+'
         replace: '\1,discard\t'
 
-    # - name: root - generate password hash
-    #   ansible.builtin.command: openssl passwd -6 "{{ password }}"
-    #   register: passwd_hash
-    # - name: root - manually edit `/etc/shadow` to change password
-    #   # apparently for security reasons neither `ansible.builtin.user` or `ansible.builtin.shell` modules will let you change the root password. Doing it manually by editing `/etc/shadow`.
-    #   ansible.builtin.replace:
-    #     path: /mnt/etc/shadow
-    #     regexp: (^root):([^:]*):(.*)
-    #     replace: \1:{{ passwd_hash.stdout }}:\3
-
-    - name: Change root password
-      ansible.builtin.user:
-        name: root
-        password: "{{ password | password_hash('sha512') }}"
+    - name: root account - Generate password hash
+      ansible.builtin.command: openssl passwd -6 "{{ password }}"
+      register: passwd_hash
+    - name: root acoount - Manually add the hashed password to `/etc/shadow`
+      # apparently for security reasons neither `ansible.builtin.user` or `ansible.builtin.shell` modules will not let you change the root password. Do it manually by editing `/etc/shadow`.
+      ansible.builtin.replace:
+        path: /mnt/etc/shadow
+        regexp: (^root):([^:]*):(.*)
+        replace: \1:{{ passwd_hash.stdout }}:\3
 
     - name: Enable sshd and NetworkManager
       ansible.builtin.command: arch-chroot /mnt systemctl enable sshd NetworkManager
