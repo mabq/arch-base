@@ -3,85 +3,76 @@
 
     # --- Check live environment
 
-    - name: stop if not booted from arch install media
+    - name: Stop if not booted from arch install media
       when: ansible_nodename != 'archiso'
       ansible.builtin.fail:
         msg: "This host is not booted from the Arch install media!"
 
     # --- Set variables
 
-    - name: check `efivars` directory existance
+    - name: Check `efivars` directory existance
       ansible.builtin.stat:
         path: /sys/firmware/efi/efivars
       register: efivars
-    - name: set `firmware`
+    - name: Set `firmware`
       ansible.builtin.set_fact:
         firmware: "{{ efivars.stat.exists | ternary('uefi', 'bios') }}"
-    - name: print `firmware`
+    - name: Print `firmware`
+      # https://wiki.archlinux.org/title/Arch_boot_process#Firmware_types
       ansible.builtin.debug:
         msg: "firmware = {{ firmware }}"
 
-    - name: set 'disk_name'
+    - name: Set 'disk_name'
       # get `sda` or `nvme0n1` from `/dev/sda` or `/dev/nvme0n1`
       # see: https://wiki.archlinux.org/title/Device_file#Block_devices
       ansible.builtin.set_fact:
         disk_name: "{{ target_disk | split('/') | last }}"
-    - name: print 'disk_name'
+    - name: Print 'disk_name'
       ansible.builtin.debug:
         msg: "disk_name = {{ disk_name }}"
 
-    - name: set 'disk_discard_support'
+    - name: Set 'disk_discard_support'
       # I don't have a PC with an nvme drive to test this now. For nvme disks this should be false because nvme has built in support for TRIM. Check this again whenever you have the oportunity.
       ansible.builtin.set_fact:
         disk_discard_support: "{{ ansible_devices[disk_name]['support_discard'] != '0' }}"
-    - name: print 'disk_discard_support'
+    - name: Print 'disk_discard_support'
       ansible.builtin.debug:
         msg: "disk_discard_support = {{ disk_discard_support }}"
 
-    - name: assign numbers to partition variables depending on firmware
+    - name: Assign numbers to partition variables depending on firmware
       ansible.builtin.set_fact:
         efi_partition_number: "{{ (firmware == 'uefi') | ternary('1', None) }}"
         boot_partition_number: "{{ (firmware == 'uefi') | ternary('2', '1') }}"
         root_partition_number: "{{ (firmware == 'uefi') | ternary('3', '2') }}"
-    - name: add the "p" prefix to partition names (for disk names that end with a number)
+    - name: Add the "p" prefix to partition names (for disk names that end with a number)
       # See `https://wiki.archlinux.org/title/Device_file#Partition`
       when: disk_name | regex_search('[0-9]$')
       ansible.builtin.set_fact:
         efi_partition_number: "p{{ efi_partition_number }}"
         boot_partition_number: "p{{ boot_partition_number }}"
         root_partition_number: "p{{ root_partition_number }}"
-    - name: print partition names
+    - name: Print partition names
       ansible.builtin.debug:
         msg: "efi_partition_number = {{ efi_partition_number }}, boot_partition_number = {{ boot_partition_number }}, root_partition_number = {{ root_partition_number }}"
 
-    - name: set 'processor'
-      ansible.builtin.set_fact:
-        processor: "{{ item is search('AuthenticAMD') | ternary('amd', 'intel')}}"
-      when: item is search('AuthenticAMD') or item is search('GenuineIntel') 
-      loop: "{{ ansible_facts.processor }}"
-    - name: print 'processor'
-      ansible.builtin.debug:
-        msg: "processor = {{ processor }}"
-
-
     # --- Prepare disk
 
-    - name: wipe disk partitions
+    - name: Wipe disk partitions
       ansible.builtin.command: find /dev -wholename "{{ target_disk }}*" -exec wipefs --force --all {} \;
 
-    - name: securely erase disk (if instructed)
+    - name: Securely erase disk (if instructed)
       when: secure_erase_disk
       block:
-      - name: about to write random data to the entire disk, will take several hours to complete
+      - name: Info
         ansible.builtin.debug:
-          msg: "processor = {{ processor }}"
-      - name: write random data to disk
+          msg: "About to write random data to the entire disk, will take several hours to complete."
+      - name: Write random data to disk
         ansible.builtin.command: dd if=/dev/urandom of={{ target_disk }}
 
-    - name: UEFI - disk partitions
+    - name: UEFI - Disk partitions
       when: firmware == 'uefi'
       block:
-      - name: UEFI - create EFI partition
+      - name: UEFI - Create EFI partition
         community.general.parted:
           device: "{{ target_disk }}"
           label: gpt
@@ -91,50 +82,50 @@
           flags: [boot, esp]
           fs_type: fat32
           state: present
-      - name: UEFI - create boot partition
+      - name: UEFI - Create boot partition
         community.general.parted:
           device: "{{ target_disk }}"
           label: gpt
           number: "{{ boot_partition_number }}"
           part_start: 512MB
-          part_end: 1024MB
+          part_end: 1536MB
           name: boot
           fs_type: ext4
           state: present
-      - name: UEFI - create root partition
+      - name: UEFI - Create root partition
         community.general.parted:
           device: '{{ target_disk }}'
           label: gpt
           number: "{{ root_partition_number }}"
-          part_start: 1024MB
+          part_start: 1536MB
           name: root
           flags: [lvm]
           state: present
 
-    - name: BIOS - disk partitions
+    - name: BIOS - Disk partitions
       when: firmware == 'bios'
       block:
-      - name: BIOS - create boot partition
+      - name: BIOS - Create boot partition
         community.general.parted:
           device: "{{ target_disk }}"
           label: msdos
           number: "{{ boot_partition_number }}"
-          part_end: 512MB
+          part_end: 1024MB
           #name: boot
           fs_type: ext4
           flags: [boot]
           state: present
-      - name: BIOS - create root partition
+      - name: BIOS - Create root partition
         community.general.parted:
           device: "{{ target_disk }}"
           label: msdos
           number: "{{ root_partition_number }}"
-          part_start: 512MB
+          part_start: 1024MB
           #name: root
           flags: [lvm]
           state: present
 
-    - name: encrypt root partition
+    - name: Encrypt root partition
       community.crypto.luks_device:
         device: "{{ target_disk }}{{ root_partition_number }}"
         type: luks2
@@ -143,178 +134,171 @@
         name: crypt
         passphrase: "{{ password }}"
 
-    - name: lvm - create volume group (physical volume is automatically created)
+    - name: LVM - Create volume group (physical volume is automatically created)
       community.general.lvg:
         pvs: /dev/mapper/crypt
         vg: vg0
         pvresize: true
         state: active
 
-    - name: lvm - create 'root' logical volume
+    - name: LVM - Create 'root' logical volume
       community.general.lvol:
         vg: vg0
         lv: root
         size: "{{ root_size_in_gb }}"
         active: true
-    - name: lvm - create 'home' logical volume
+    - name: LVM - Create 'home' logical volume
       community.general.lvol:
         vg: vg0
         lv: home
         size: +100%FREE
         active: true
 
-    - name: UEFI - format EFI partition
+    - name: UEFI - Format EFI partition
       when: firmware == 'uefi'
       community.general.filesystem:
         dev: "{{ target_disk }}{{ efi_partition_number }}"
         fstype: vfat
         opts: '-F32'
-    - name: format boot partition
+    - name: Format boot partition
       community.general.filesystem:
         dev: "{{ target_disk }}{{ boot_partition_number }}"
         fstype: ext4
-    - name: format `root` logical volume
+    - name: Format `root` logical volume
       community.general.filesystem:
         dev: /dev/vg0/root
         fstype: ext4
-    - name: format `home` logical volume
+    - name: Format `home` logical volume
       community.general.filesystem:
         dev: /dev/vg0/home
         fstype: ext4
 
-    - name: create directory for '/home'
+    - name: Create directory for '/home'
       ansible.builtin.file:
         path: /mnt/home
         state: directory
-    - name: create directory for '/boot'
+    - name: Create directory for '/boot'
       ansible.builtin.file:
         path: /mnt/boot
         state: directory
 
-    - name: mount root
+    - name: Mount root
       ansible.posix.mount:
         src: /dev/vg0/root
         path: /mnt
         fstype: ext4
         state: mounted
-    - name: mount home
+    - name: Mount home
       ansible.posix.mount:
         src: /dev/vg0/home
         path: /mnt/home
         fstype: ext4
         state: mounted
-    - name: mount boot
+    - name: Mount boot
       ansible.posix.mount:
         src: "{{ target_disk }}{{ boot_partition_number }}"
         path: /mnt/boot
         fstype: ext4
         state: mounted
 
+    # --- Installation
 
-    # --- Install
+    - name: Install system packages
+      ansible.builtin.command: pacstrap /mnt base linux linux-lts linux-firmware grub lvm2 neovim networkmanager openssh ansible
 
-    - name: install system packages
-      ansible.builtin.command: pacstrap /mnt base linux linux-lts linux-firmware lvm2 grub
-
-    - name: UEFI - install `efibootmgr`
+    - name: UEFI - Install `efibootmgr`
       when: firmware == 'uefi'
       ansible.builtin.command: pacstrap /mnt efibootmgr
 
-    - name: install basic utilities
-      ansible.builtin.command: pacstrap /mnt networkmanager openssh neovim tmux ansible
+    # --- Configure the system
 
-    - name: AMD - install microcode updates
-      when: processor == 'amd'
-      ansible.builtin.command: pacstrap /mnt amd-ucode
-    - name: Intel - install  microcode updates
-      when: processor == 'intel'
-      ansible.builtin.command: pacstrap /mnt intel-ucode
-
-
-    # --- general configurations
-
-    - name: fstab - create '/etc' directory
+    - name: fstab - Create '/etc' directory
       ansible.builtin.file:
         path: /mnt/etc
         state: directory
-    - name: fstab - generate file
+    - name: fstab - Generate file
       ansible.builtin.shell:
         cmd: genfstab -U -p /mnt >> /mnt/etc/fstab
-    - name: fstab - enable TRIM support (if supported)
+    - name: fstab - Enable TRIM support (if supported)
       when: disk_discard_support
       ansible.builtin.replace:
         path: /mnt/etc/fstab
         regexp: '(relatime)\s+'
         replace: '\1,discard\t'
 
-    - name: root - generate password hash
-      ansible.builtin.command: openssl passwd -6 "{{ password }}"
-      register: passwd_hash
-    - name: root - manually edit `/etc/shadow` to change password
-      # apparently for security reasons neither `ansible.builtin.user` or `ansible.builtin.shell` modules will let you change the root password. Doing it manually by editing `/etc/shadow`.
-      ansible.builtin.replace:
-        path: /mnt/etc/shadow
-        regexp: (^root):([^:]*):(.*)
-        replace: \1:{{ passwd_hash.stdout }}:\3
+    # - name: root - generate password hash
+    #   ansible.builtin.command: openssl passwd -6 "{{ password }}"
+    #   register: passwd_hash
+    # - name: root - manually edit `/etc/shadow` to change password
+    #   # apparently for security reasons neither `ansible.builtin.user` or `ansible.builtin.shell` modules will let you change the root password. Doing it manually by editing `/etc/shadow`.
+    #   ansible.builtin.replace:
+    #     path: /mnt/etc/shadow
+    #     regexp: (^root):([^:]*):(.*)
+    #     replace: \1:{{ passwd_hash.stdout }}:\3
 
-    - name: enable sshd and NetworkManager
+    - name: Change root password
+      ansible.builtin.user:
+        name: root
+        password: {{ password | password_hash('sha512') }}
+
+    - name: Enable sshd and NetworkManager
       ansible.builtin.command: arch-chroot /mnt systemctl enable sshd NetworkManager
 
-    - name: setup console keymap
-      ansible.builtin.command: arch-chroot /mnt echo KEYMAP={{ console_keymap }} > /etc/vconsole.conf
-
-    - name: set time zone
+    - name: Set time zone
       ansible.builtin.command: arch-chroot /mnt ln -sf /usr/share/zoneinfo/{{ timezone }} /etc/localtime
     - name: set hardware clock to current system time
       ansible.builtin.command: arch-chroot /mnt hwclock --systohc
 
-    - name: enable locales
+    - name: Enable locales
       lineinfile:
         dest: /mnt/etc/locale.gen
         regexp: '#{{ item }}\.UTF-8 UTF-8'
         line: '{{ item }}.UTF-8 UTF-8'
       loop: '{{ locales }}'
-    - name: generate locales
+    - name: Generate locales
       ansible.builtin.command: arch-chroot /mnt locale-gen
-    - name: set default locale
+    - name: Set default locale
       ansible.builtin.copy:
         content: LANG={{ locales | first }}.UTF-8
         dest: /mnt/etc/locale.conf
+    - name: Setup console keymap
+      ansible.builtin.command: arch-chroot /mnt echo KEYMAP={{ console_keymap }} > /etc/vconsole.conf
 
-    - name: setup hostname
+    - name: Setup hostname
       ansible.builtin.copy:
         content: '{{ inventory_hostname }}'
         dest: /mnt/etc/hostname
 
-    # initial ram filesystem configuration
+    # --- Initial ram filesystem configuration
 
-    - name: initramfs - create file to store key
+    - name: initramfs - Create file to store key
       ansible.builtin.shell: arch-chroot /mnt dd bs=512 count=4 if=/dev/urandom of=/crypto_keyfile.bin
-    - name: initramfs - populate file with key content
+    - name: initramfs - Populate file with key content
       ansible.builtin.shell: echo "{{ password }}" | arch-chroot /mnt  cryptsetup luksAddKey {{ target_disk }}{{ root_partition_number }} /crypto_keyfile.bin -
-    - name: initramfs - remove all permissions from key file
+    - name: initramfs - Remove all permissions from key file
       ansible.builtin.command: arch-chroot /mnt chmod 000 /crypto_keyfile.bin
-    - name: initramfs - enable keyfile, encryption and lvm
+    - name: initramfs - Enable keyfile, encryption and lvm
       lineinfile:
         dest: /mnt/etc/mkinitcpio.conf
         regexp: '{{ item.regex }}'
         line: '{{ item.line }}'
       loop:
         - { regex: ^FILES, line: FILES=(/crypto_keyfile.bin) }
-        - { regex: ^HOOKS, line: HOOKS=(base udev autodetect modconf kms keyboard keymap consolefont block encrypt lvm2 filesystems fsck) }
-    - name: initramfs - generate the initial ramdisk image for `linux`
+        - { regex: ^HOOKS, line: HOOKS=(base udev autodetect modconf kms keyboard keymap consolefont numlock block encrypt lvm2 filesystems fsck) }
+    - name: initramfs - Generate the initial ramdisk image for `linux`
       ansible.builtin.command: arch-chroot /mnt mkinitcpio -p linux
-    - name: initramfs - generate the initial ramdisk image for `linux-lts`
+    - name: initramfs - Generate the initial ramdisk image for `linux-lts`
       ansible.builtin.command: arch-chroot /mnt mkinitcpio -p linux-lts
 
-    # --- bootloader configuration
+    # --- Bootloader configuration
+    #     (https://wiki.archlinux.org/title/Arch_boot_process#Boot_loader)
 
-    - name: UEFI - create '/boot/EFI' directory
+    - name: UEFI - Create '/boot/EFI' directory
       when: firmware == 'uefi'
       ansible.builtin.file:
         path: /mnt/boot/EFI
         state: directory
-    - name: UEFI - mount EFI partition
+    - name: UEFI - Mount EFI partition
       when: firmware == 'uefi'
       ansible.posix.mount:
         src: "{{ target_disk }}{{ efi_partition_number }}"
@@ -322,14 +306,14 @@
         fstype: vfat
         state: mounted
 
-    - name: UEFI - install grub
+    - name: UEFI - Install grub
       when: firmware == 'uefi'
       ansible.builtin.command: "arch-chroot /mnt grub-install --target=x86_64-efi --recheck {{ target_disk }}"
-    - name: BIOS - install grub
+    - name: BIOS - Install grub
       when: firmware == 'bios'
       ansible.builtin.command: "arch-chroot /mnt grub-install --target=i386-pc --recheck {{ target_disk }}"
 
-    - name: grub configuration - enable encryption and TRIM (if supported)
+    - name: GRUB configuration - Enable encryption and TRIM (if supported)
       lineinfile:
         dest: /mnt/etc/default/grub
         regexp: '{{ item.regex }}'
@@ -339,34 +323,34 @@
         - { regex: ^#GRUB_ENABLE_CRYPTODISK, line: GRUB_ENABLE_CRYPTODISK=y }
         # enable TRIM (if supported) and encryption
         - { regex: ^GRUB_CMDLINE_LINUX="", line: "GRUB_CMDLINE_LINUX=\"{{ disk_discard_support | ternary('cryptdevice={{ target_disk }}{{ root_partition_number }}:crypt:allow-discards', 'cryptdevice={{ target_disk }}{{ root_partition_number }}:crypt') }}\"" }
-    - name: grub - generate boot loader file
+    - name: GRUB - Generate boot loader file
       ansible.builtin.command: "arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg"
 
-    # --- swap configuration
+    # --- Swap configuration
 
-    - name: configure swap
+    - name: Configure swap
       when: swap_size_in_mb > 0
       block:
-      - name: swap - create empty file of desired size
+      - name: Swap - Create empty file of desired size
         ansible.builtin.command: arch-chroot /mnt dd if=/dev/zero of=/swapfile bs=1M count={{ swap_size_in_mb }} status=progress
-      - name: swap - change file permissions
+      - name: Swap - Change file permissions
         ansible.builtin.command: arch-chroot /mnt chmod 600 /swapfile
-      - name: swap - set file as swap file
+      - name: Swap - Set file as swap file
         ansible.builtin.command: arch-chroot /mnt mkswap /swapfile
-      - name: swap - include swap file in `/etc/fstab`
+      - name: Swap - Include swap file in `/etc/fstab`
         lineinfile:
           path: /mnt/etc/fstab
           line: "/swapfile none swap sw 0 0"
-      - name: swap - check fstab file correctness
+      - name: Swap - Check fstab file correctness
         ansible.builtin.command: arch-chroot /mnt mount -a
-      - name: swap - enable
+      - name: Swap - Enable
         ansible.builtin.command: arch-chroot /mnt swapon -a
 
-    # --- reboot and exit playbook
+    # --- Reboot and exit playbook
       
-    - name: shutdown
+    - name: Shutdown
       community.general.shutdown:
 
-    - name: exit playbook gracefully
+    - name: Exit playbook gracefully
       ansible.builtin.meta: end_host
 

@@ -1,13 +1,19 @@
 # Basic Archlinux installation with Ansible
 
-I like Archlinux a lot but I don't want to manually redo everything time and again. To fully automate my setup I created 2 ansible scripts:
+I like Archlinux a lot but I don't want to manually install it. To fully automate my setup I created 2 ansible scripts:
 
 1. [ansible-archlinux](https://github.com/mabq/ansible-archlinux) (this repo) - fully automates a [basic Archlinux installation](https://wiki.archlinux.org/title/Installation_guide), leaving the host ready to run the second script.
 2. [ansible-setup](https://github.com/mabq/ansible-setup) installs and configures all the tools I need.
 
-##### Why two different scrips?
+
+## Why two different scrips?
 
 [Ansible](https://archlinux.org/packages/extra/any/ansible/) is not included in the Archlinux [installation image](https://archlinux.org/download/), so this playbook (`local.yml`) must be executed from a [controller node](https://docs.ansible.com/ansible/latest/getting_started/index.html#getting-started-with-ansible). The playbook in [ansible-setup](https://github.com/mabq/ansible-setup) can be executed locally with `ansible-pull`, more details on that repo.
+
+
+## Why not the `archinstall` script 
+
+While the `archinstall` script is super easy to setup, most of the times I tried to run it with encryption enabled it fails. It also won't allow you setup things like LVM or the size of the swap.
 
 
 ## About this script
@@ -16,10 +22,7 @@ I like Archlinux a lot but I don't want to manually redo everything time and aga
    - Securly erase the disk before installation (`false` by default, if enabled the playbook will take several hours to complete even on SSDs).
    - Detects firmware type and creates partitions accordingly.
    - Encrypts the root partition using [LUKS](https://wiki.archlinux.org/title/Dm-crypt/Encrypting_an_entire_system#LVM_on_LUKS) and configures two [LVM](https://wiki.archlinux.org/title/LVM) logical volumes (on top of it), one for `/` (32gb by default) and one for `/home` (remaining space).
-   - Installs the following packages:
-     - System packages: `base`, `linux`, `linux-lts`, `linux-firmware`, `lvm2`, `grub` and `efibootmgr` (UEFI only).
-     - Basic utilities: `networkmanager`, `openssh`, `neovim`, `tmux` and `ansible` (leaving the host ready to run [ansible-setup](https://github.com/mabq/ansible-setup)).
-     - Microcode updates: `amd-ucode` or `intel-ucode`.
+   - Installs only the basic packages.
    - Performs basic configurations:
      - Detects disk type and enables TRIM if supported.
      - Enables `sshd` and `NetworkManager` services.
@@ -34,6 +37,8 @@ I like Archlinux a lot but I don't want to manually redo everything time and aga
 ## Before running the script
 
 On the managed node (where you want to install Archlinux):
+
+- Boot the live environment.
 
 - Change the password of the root user:
 

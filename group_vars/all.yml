@@ -1,5 +1,5 @@
-# --- Encryption/root password
-#     See README.mf for instructions
+# Encryption/root password
+#   See README.mf for instructions
 password: !vault |
           $ANSIBLE_VAULT;1.1;AES256
           35336665356461363162653733376162353939393363353137326632303835333133333038623638
@@ -8,20 +8,20 @@ password: !vault |
           3335323535356433330a346137643239353635333330343634643236643438313338393634626664
           6436
 
-# --- Default values 
-#     Do not edit these variable here!
-#     Overwrite them for any host in each `host_vars` file.
+# Default values 
+#   Do not edit these variable here!
+#   Overwrite them for any host in each `host_vars` file.
 target_disk: /dev/sda
-secure_erase_disk: false    # will take several hours to complete!
-root_size_in_gb: 32G    # replace with any size you want
-swap_size_in_mb: 4096    # use 0 for no swap or a multiple of 1024
-console_keymap: us    # https://wiki.archlinux.org/title/Linux_console/Keyboard_configuration
+secure_erase_disk: false  # will take several hours to complete!
+root_size_in_gb: 32G  # replace with any size you want
+swap_size_in_mb: 4096  # use 0 for no swap or a multiple of 1024
+console_keymap: us  # https://wiki.archlinux.org/title/Linux_console/Keyboard_configuration
 timezone: 'America/Guayaquil'
-locales:   # the first one is the default one
+locales:  # the first one is the default one
   - en_US
   - es_EC
 
-# --- Ansible config variables (ignore)
-ansible_user: root    # execute the playbook as root
-ansible_ssh_common_args: -o "StrictHostKeyChecking no" -o "UserKnownHostsFile /dev/null"    # avoid errors for not having the IP of the managed node/s in the `~/.ssh/known_hosts` file
+# Ansible configuration (ignore)
+ansible_user: root  # execute the playbook as root
+ansible_ssh_common_args: -o "StrictHostKeyChecking no" -o "UserKnownHostsFile /dev/null"  # avoid errors for not having the IP of the managed node/s in the `~/.ssh/known_hosts` file
 
