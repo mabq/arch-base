@@ -1,5 +1,10 @@
-# Encryption/root password
-#   See README.mf for instructions
+# --- Notes:
+#     The `username` variable must be passed via command-line arguments (for security reasons).
+
+
+# --- Encrypted variables
+#     Change them here to apply to all hosts or in the corresponging `host_vars/{HOSTNAME}.yml` file
+#     See the README.md file for instructions to encrypt values in Ansible
 password: !vault |
           $ANSIBLE_VAULT;1.1;AES256
           31323138626364626366653238356564386439303562376331313537323338386135653937663166
@@ -7,22 +12,33 @@ password: !vault |
           62323265303732663163396439646533313765643034356130383232616634643330623862633436
           6137353731656561330a386132316232366130623831626663393965666131383265626635333431
           6662
+encryption_password: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          66363937626135333661653134623362326264333964316365373865353261323766313037326263
+          3235303565346462363861326637623739306530643062310a366461343830626531376330643936
+          61663234373234313161383262363766366635613864393264366334663330363736646561363263
+          3263383265366632370a303836356364333762656433626364303934633433353064373630333966
+          37333062623235663165633136333837326236323261383533643462636465323163326435616464
+          30356364386664303064346339333933663030353836393533623034656539356531373763653664
+          306230343666326337313231383033636534
 
 
-# Default values 
-#   Do not edit these variable here!
-#   Overwrite them for any host in each `host_vars` file.
-target_disk: /dev/sda
-secure_erase_disk: false  # will take several hours to complete!
-root_size_in_gb: 32G  # replace with any size you want
-swap_size_in_mb: 4096  # use 0 for no swap or a multiple of 1024
+# --- Hosts default variables
+#     Do not edit these variable here, overwrite them in the corresponding `host_vars/{HOSTNAME}.yml` file
+target_disk: /dev/sda  # will be different for nvme disks: see README.md
+secure_erase_disk: false  # if enabled, will take several hours to complete
+root_size_in_gb: 32G  # system disk size
+swap_size_in_mb: 4096  # swap size, use 0 for no swap or a multiple of 1024
 console_keymap: us  # https://wiki.archlinux.org/title/Linux_console/Keyboard_configuration
 timezone: 'America/Guayaquil'
 locales:  # the first one is the default one
   - en_US
   - es_EC
 
-# Ansible configuration (ignore)
-ansible_user: root  # execute the playbook as root
-ansible_ssh_common_args: -o "StrictHostKeyChecking no" -o "UserKnownHostsFile /dev/null"  # avoid errors for not having the IP of the managed node/s in the `~/.ssh/known_hosts` file
 
+# --- Anible configuration (do not change)
+#     Avoid checking the `~/.ssh/known_hosts` file because everytime I boot the managed node
+#     from the Live Environment it changes. Tried to use `host_key_checking = False` in the
+#     `ansible.cfg` file but it still gives me an error when there is already an entry for
+#     the given host.
+ansible_ssh_common_args: -o "StrictHostKeyChecking no" -o "UserKnownHostsFile /dev/null"

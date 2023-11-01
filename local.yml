@@ -1,20 +1,28 @@
 - hosts: all
   tasks:
 
-    # --- Check live environment
 
-    - name: Stop if not booted from arch install media
+    # --- Security check ---
+    #     Avoid applying this script by accident to any host
+
+    - name: Security --- exit if not booted from arch install media
       when: ansible_nodename != 'archiso'
       ansible.builtin.fail:
         msg: "This host is not booted from the Arch install media!"
 
-    # --- Set variables
+
+    # --- Set variables ---
+    #     Get system information required later in the process
+
+    - name: Notify section
+      ansible.builtin.debug:
+        msg: "============================== SET VARIABLES =============================="
 
     - name: Check `efivars` directory existance
       ansible.builtin.stat:
         path: /sys/firmware/efi/efivars
       register: efivars
-    - name: Set `firmware`
+    - name: Get `firmware`
       ansible.builtin.set_fact:
         firmware: "{{ efivars.stat.exists | ternary('uefi', 'bios') }}"
     - name: Print `firmware`
@@ -22,29 +30,29 @@
       ansible.builtin.debug:
         msg: "firmware = {{ firmware }}"
 
-    - name: Set 'disk_name'
+    - name: Get installation target `disk_name`
       # get `sda` or `nvme0n1` from `/dev/sda` or `/dev/nvme0n1`
       # see: https://wiki.archlinux.org/title/Device_file#Block_devices
       ansible.builtin.set_fact:
         disk_name: "{{ target_disk | split('/') | last }}"
-    - name: Print 'disk_name'
+    - name: Print `disk_name`
       ansible.builtin.debug:
         msg: "disk_name = {{ disk_name }}"
 
-    - name: Set 'disk_discard_support'
+    - name: Get `disk_discard_support`
       # I don't have a PC with an nvme drive to test this now. For nvme disks this should be false because nvme has built in support for TRIM. Check this again whenever you have the oportunity.
       ansible.builtin.set_fact:
         disk_discard_support: "{{ ansible_devices[disk_name]['support_discard'] != '0' }}"
-    - name: Print 'disk_discard_support'
+    - name: Print `disk_discard_support`
       ansible.builtin.debug:
         msg: "disk_discard_support = {{ disk_discard_support }}"
 
-    - name: Assign numbers to partition variables depending on firmware
+    - name: Determine partition names based on firmware type
       ansible.builtin.set_fact:
         efi_partition_number: "{{ (firmware == 'uefi') | ternary('1', None) }}"
         boot_partition_number: "{{ (firmware == 'uefi') | ternary('2', '1') }}"
         root_partition_number: "{{ (firmware == 'uefi') | ternary('3', '2') }}"
-    - name: Add the "p" prefix to partition names (for disk names that end with a number)
+    - name: Prepend with "p" for disks names that end with a number
       # See `https://wiki.archlinux.org/title/Device_file#Partition`
       when: disk_name | regex_search('[0-9]$')
       ansible.builtin.set_fact:
@@ -55,9 +63,14 @@
       ansible.builtin.debug:
         msg: "efi_partition_number = {{ efi_partition_number }}, boot_partition_number = {{ boot_partition_number }}, root_partition_number = {{ root_partition_number }}"
 
-    # --- Prepare disk
 
-    - name: Wipe disk partitions
+    # --- Disk configuration ---
+
+    - name: Notify section
+      ansible.builtin.debug:
+        msg: "============================== DISK CONFIGURATION =============================="
+
+    - name: Wipe all disk partitions of the target disk
       ansible.builtin.command: find /dev -wholename "{{ target_disk }}*" -exec wipefs --force --all {} \;
 
     - name: Securely erase disk (if instructed)
@@ -65,7 +78,7 @@
       block:
       - name: Info
         ansible.builtin.debug:
-          msg: "About to write random data to the entire disk, will take several hours to complete."
+          msg: "About to write random data to the entire disk, will take several hours to complete"
       - name: Write random data to disk
         ansible.builtin.command: dd if=/dev/urandom of={{ target_disk }}
 
@@ -129,10 +142,10 @@
       community.crypto.luks_device:
         device: "{{ target_disk }}{{ root_partition_number }}"
         type: luks2
-        new_passphrase: "{{ password }}"
+        new_passphrase: "{{ encryption_password }}"
         state: opened
         name: crypt
-        passphrase: "{{ password }}"
+        passphrase: "{{ encryption_password }}"
 
     - name: LVM - Create volume group (physical volume is automatically created)
       community.general.lvg:
@@ -201,130 +214,127 @@
         fstype: ext4
         state: mounted
 
-    # --- Installation
+    # --- Packages installation ---
 
-    - name: Install system packages
-      # sudo must be installed because we will lock the root account
+    - name: Notify section
+      ansible.builtin.debug:
+        msg: "============================== PACKAGES INSTALLATION =============================="
+
+    - name: Packages installation
+      # `sudo` is required now because we will disable root login
+      # check if you can ssh with the user account, otherwise install ssh in the second script
       ansible.builtin.command: pacstrap /mnt base linux linux-lts linux-firmware grub lvm2 sudo neovim networkmanager openssh ansible
 
-    - name: UEFI - Install `efibootmgr`
+    - name: Install `efibootmgr` (UEFI only)
       when: firmware == 'uefi'
       ansible.builtin.command: pacstrap /mnt efibootmgr
 
-    # --- Configure the system
 
-    - name: fstab - Create '/etc' directory
+    # --- System configuration ---
+
+    - name: Notify section
+      ansible.builtin.debug:
+        msg: "============================== SYSTEM CONFIGURATION =============================="
+
+    - name: fstab - create '/etc' directory
       ansible.builtin.file:
         path: /mnt/etc
         state: directory
-    - name: fstab - Generate file
+    - name: fstab - generate file
       ansible.builtin.shell:
         cmd: genfstab -U -p /mnt >> /mnt/etc/fstab
-    - name: fstab - Enable TRIM support (if supported)
+    - name: fstab - enable TRIM support (if supported)
       when: disk_discard_support
       ansible.builtin.replace:
         path: /mnt/etc/fstab
         regexp: '(relatime)\s+'
         replace: '\1,discard\t'
 
-    - name: root account - Generate password hash
-      # arch changes the password hashing algorithm from `sha512` to `yescript` (https://archlinux.org/news/changes-to-default-password-hashing-algorithm-and-umask-settings/)
-      # openssl does not support `yescript` yet, when it does update the `-6` flag to the one corresponding to `yescript`
-      ansible.builtin.command: openssl passwd -6 "{{ password }}"
-      register: passwd_hash
-    - name: root acoount - Manually add the hashed password to `/etc/shadow`
-      ansible.builtin.replace:
-        path: /mnt/etc/shadow
-        regexp: (^root):([^:]*):(.*)
-        replace: \1:{{ passwd_hash.stdout }}:\3
+    - name: Setup hostname
+      ansible.builtin.command: arch-chroot /mnt hostnamectl set-hostname "{{ inventory_hostname }}"
+    # - name: Setup hostname
+    #   ansible.builtin.copy:
+    #     content: '{{ inventory_hostname }}'
+    #     dest: /mnt/etc/hostname
 
-    - name: user account - Create group
-      ansible.builtin.group:
-        name: "{{ user_name }}"
-    - name: user account - Generate password hash
-      # arch changes the password hashing algorithm from `sha512` to `yescript` (https://archlinux.org/news/changes-to-default-password-hashing-algorithm-and-umask-settings/)
-      # openssl does not support `yescript` yet, when it does update the `-6` flag to the one corresponding to `yescript`
-      ansible.builtin.command: "openssl passwd -6 {{ user_password }}"
-      register: user_password_hash
-    - name: user account - Create account
-      ansible.builtin.user:
-        name: "{{ user_name }}"
-        # primary group
-        group: "{{ user_name }}"
-        # supplementary groups --- https://wiki.archlinux.org/title/Users_and_groups#Group_list
-        # (`input` and `uinput` are required for `kmonad`)
-        groups: adm,wheel,input,uinput
-        # password hashed are stored in `/etc/shadow`
-        password: "{{ user_password_hash.stdout }}"
-        # the shell must be one of those listed in `/etc/shells`, zsh is not available yet
-        shell: /bin/bash
-    - name: user account - Create sudoers file
-      ansible.builtin.copy:
-        src: users/mabq/sudoers/mabq
-        # https://wiki.archlinux.org/title/Sudo#Configure_sudo_using_drop-in_files_in_/etc/sudoers.d
-        dest: /etc/sudoers.d/
-        owner: root
-        group: root
-        mode: 0440
-
-    - name: Enable sshd and NetworkManager
-      ansible.builtin.command: arch-chroot /mnt systemctl enable sshd NetworkManager
-
-    - name: Set time zone
+    - name: Setup timezone
       ansible.builtin.command: arch-chroot /mnt ln -sf /usr/share/zoneinfo/{{ timezone }} /etc/localtime
-    - name: set hardware clock to current system time
+    - name: Set hardware clock to current system time
       ansible.builtin.command: arch-chroot /mnt hwclock --systohc
 
-    - name: Enable locales
+    - name: Locales - enable locales desired locales
       lineinfile:
         dest: /mnt/etc/locale.gen
         regexp: '#{{ item }}\.UTF-8 UTF-8'
         line: '{{ item }}.UTF-8 UTF-8'
       loop: '{{ locales }}'
-    - name: Generate locales
+    - name: Locales - generate files
       ansible.builtin.command: arch-chroot /mnt locale-gen
-    - name: Set default locale
+    - name: Locales - setup locale language
       ansible.builtin.copy:
         content: LANG={{ locales | first }}.UTF-8
         dest: /mnt/etc/locale.conf
-    - name: Setup console keymap
+    - name: Locales - setup console keymap
       ansible.builtin.command: arch-chroot /mnt echo KEYMAP={{ console_keymap }} > /etc/vconsole.conf
 
-    - name: Setup hostname
-      ansible.builtin.copy:
-        content: '{{ inventory_hostname }}'
-        dest: /mnt/etc/hostname
+    - name: Enable `NetworkManager` service
+      # required to be able to connect to a wireless network later
+      ansible.builtin.command: arch-chroot /mnt systemctl enable NetworkManager
 
-    # --- Initial ram filesystem configuration
+    - name: Enable `sshd` service
+      # check if you can login with the useraccount, otherwise do this later
+      ansible.builtin.command: arch-chroot /mnt systemctl enable sshd NetworkManager
 
-    - name: initramfs - Create file to store key
-      ansible.builtin.shell: arch-chroot /mnt dd bs=512 count=4 if=/dev/urandom of=/crypto_keyfile.bin
-    - name: initramfs - Populate file with key content
-      ansible.builtin.shell: echo "{{ password }}" | arch-chroot /mnt  cryptsetup luksAddKey {{ target_disk }}{{ root_partition_number }} /crypto_keyfile.bin -
-    - name: initramfs - Remove all permissions from key file
-      ansible.builtin.command: arch-chroot /mnt chmod 000 /crypto_keyfile.bin
-    - name: initramfs - Enable keyfile, encryption and lvm
+
+    # --- Initial ram filesystem ---
+    #     The initramfs is a temporary filesystem that is loaded into memory during
+    #     the boot process before the real root filesystem is mounted. We need to 
+    #     recreate the initramfs with support for LVM and disk encryption.
+
+    - name: Notify section
+      ansible.builtin.debug:
+        msg: "============================== INITRAMFS =============================="
+
+    - name: initramfs - create a key file to avoid typing the encryption password twice during boot
+      block:
+      - name: initramfs - create an empty file
+        ansible.builtin.shell: arch-chroot /mnt dd bs=512 count=4 if=/dev/urandom of=/crypto_keyfile.bin
+      - name: initramfs - append the encryption key to it
+        ansible.builtin.shell: echo "{{ encryption_password }}" | arch-chroot /mnt  cryptsetup luksAddKey {{ target_disk }}{{ root_partition_number }} /crypto_keyfile.bin -
+      - name: initramfs - remove all permissions for security reasons
+        ansible.builtin.command: arch-chroot /mnt chmod 000 /crypto_keyfile.bin
+
+    - name: initramfs - change configuration options for the `mkinitcpio` script
+      # mkinitcpio is a Bash script used to create an initial ramdisk environment
       lineinfile:
         dest: /mnt/etc/mkinitcpio.conf
         regexp: '{{ item.regex }}'
         line: '{{ item.line }}'
       loop:
+        # add the key file
         - { regex: ^FILES, line: FILES=(/crypto_keyfile.bin) }
+        # add teh `encrypt` and `lvm2` hooks
         - { regex: ^HOOKS, line: HOOKS=(base udev autodetect modconf kms keyboard keymap consolefont block encrypt lvm2 filesystems fsck) }
+
     - name: initramfs - Generate the initial ramdisk image for `linux`
       ansible.builtin.command: arch-chroot /mnt mkinitcpio -p linux
     - name: initramfs - Generate the initial ramdisk image for `linux-lts`
       ansible.builtin.command: arch-chroot /mnt mkinitcpio -p linux-lts
 
-    # --- Bootloader configuration
-    #     (https://wiki.archlinux.org/title/Arch_boot_process#Boot_loader)
 
-    - name: UEFI - Create '/boot/EFI' directory
+    # --- Bootloader ---
+    #     https://wiki.archlinux.org/title/Arch_boot_process#Boot_loader
+
+    - name: Notify section
+      ansible.builtin.debug:
+        msg: "============================== BOOTLOADER =============================="
+
+    - name: Bootloader (UEFI) - create '/boot/EFI' directory
       when: firmware == 'uefi'
       ansible.builtin.file:
         path: /mnt/boot/EFI
         state: directory
-    - name: UEFI - Mount EFI partition
+    - name: Bootloader (UEFI) - mount EFI partition
       when: firmware == 'uefi'
       ansible.posix.mount:
         src: "{{ target_disk }}{{ efi_partition_number }}"
@@ -332,14 +342,14 @@
         fstype: vfat
         state: mounted
 
-    - name: UEFI - Install grub
+    - name: Bootloader (UEFI) - install grub
       when: firmware == 'uefi'
       ansible.builtin.command: "arch-chroot /mnt grub-install --target=x86_64-efi --recheck {{ target_disk }}"
-    - name: BIOS - Install grub
+    - name: Bootloader (BIOS) - install grub
       when: firmware == 'bios'
       ansible.builtin.command: "arch-chroot /mnt grub-install --target=i386-pc --recheck {{ target_disk }}"
 
-    - name: GRUB configuration - Enable encryption and TRIM (if supported)
+    - name: Bootloader - Configure GRUB
       lineinfile:
         dest: /mnt/etc/default/grub
         regexp: '{{ item.regex }}'
@@ -349,12 +359,18 @@
         - { regex: ^#GRUB_ENABLE_CRYPTODISK, line: GRUB_ENABLE_CRYPTODISK=y }
         # enable TRIM (if supported) and encryption
         - { regex: ^GRUB_CMDLINE_LINUX="", line: "GRUB_CMDLINE_LINUX=\"{{ disk_discard_support | ternary('cryptdevice={{ target_disk }}{{ root_partition_number }}:crypt:allow-discards', 'cryptdevice={{ target_disk }}{{ root_partition_number }}:crypt') }}\"" }
-    - name: GRUB - Generate boot loader file
+
+    - name: Bootloader - generate boot loader file
       ansible.builtin.command: "arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg"
 
-    # --- Swap configuration
 
-    - name: Configure swap
+    # --- Enable swap ---
+
+    - name: Notify section
+      ansible.builtin.debug:
+        msg: "============================== ENABLE SWAP =============================="
+
+    - name: Enable swap
       when: swap_size_in_mb > 0
       block:
       - name: Swap - Create empty file of desired size
@@ -372,7 +388,79 @@
       - name: Swap - Enable
         ansible.builtin.command: arch-chroot /mnt swapon -a
 
+
+    # --- User accounts ---
+    #     the root user is disabled by default
+    #     the user account will have super user privileges
+
+    - name: Notify section
+      ansible.builtin.debug:
+        msg: "============================== USER ACCOUNTS =============================="
+
+    - name: User account - create group
+      ansible.builtin.group:
+        name: "{{ username }}"
+    - name: User account - generate password hash
+      # Archlinux changed the password hashing algorithm from `sha512` to `yescript` (https://archlinux.org/news/changes-to-default-password-hashing-algorithm-and-umask-settings/)
+      # openssl does not support `yescript` yet, when it does update the `-6` flag to the one corresponding to `yescript`
+      ansible.builtin.command: "openssl passwd -6 {{ password }}"
+      register: password_hash
+    - name: User account - create account
+      ansible.builtin.user:
+        name: "{{ username }}"
+        # primary group
+        group: "{{ username }}"
+        # supplementary groups --- https://wiki.archlinux.org/title/Users_and_groups#Group_list
+        #   `wheel` is used by polkit for administrative tasks
+        #   `input` and `uinput` are required for `kmonad`
+        groups: adm,wheel,input,uinput
+        # password hashed are stored in `/etc/shadow`
+        password: "{{ password_hash.stdout }}"
+        # the shell must be one of those listed in `/etc/shells`, zsh is not available yet
+        shell: /bin/bash
+    - name: User account - create sudoers file
+      ansible.builtin.copy:
+        # https://wiki.archlinux.org/title/Sudo#Configure_sudo_using_drop-in_files_in_/etc/sudoers.d
+        content: "{{ username }} ALL=(ALL:ALL) NOPASSWD: ALL"
+        dest: "/etc/sudoers.d/{{ username }}"
+        owner: root
+        group: root
+        # https://wiki.archlinux.org/title/Sudo#Sudoers_default_file_permissions
+        mode: 0440
+    - name: User account - create the `.vault_key` file in the users home directory
+      # This will allow us to run the second script without manually creating this file
+      ansible.builtin.copy:
+        content: "{{ encryption_password }}"
+        dest: "/home/{{ username }}/.vault_key"
+        owner: root
+        group: root
+        # https://wiki.archlinux.org/title/Sudo#Sudoers_default_file_permissions
+        mode: 0440
+
+    - name: Disable root login
+      # Reduce the surface for attacks
+      # https://wiki.archlinux.org/title/Sudo#Disable_root_login
+      # https://docs.ansible.com/ansible/latest/collections/ansible/builtin/user_module.html#parameter-password
+      ansible.builtin.user:
+        name: root
+        password: '!'
+    # - name: root account - Generate password hash
+    #   (In case you ever want to create a password for the root account, you must edit the shadow file manually)
+    #   # arch changes the password hashing algorithm from `sha512` to `yescript` (https://archlinux.org/news/changes-to-default-password-hashing-algorithm-and-umask-settings/)
+    #   # openssl does not support `yescript` yet, when it does update the `-6` flag to the one corresponding to `yescript`
+    #   ansible.builtin.command: openssl passwd -6 "{{ encryption_password }}"
+    #   register: passwd_hash
+    # - name: root acount - Manually add the hashed password to `/etc/shadow`
+    #   ansible.builtin.replace:
+    #     path: /mnt/etc/shadow
+    #     regexp: (^root):([^:]*):(.*)
+    #     replace: \1:{{ passwd_hash.stdout }}:\3
+
     # --- Reboot and exit playbook
+
+    - name: Notify section
+      ansible.builtin.debug:
+        msg: "============================== RESTARTING =============================="
       
     - name: Shutdown
       community.general.shutdown:
