@@ -204,7 +204,8 @@
     # --- Installation
 
     - name: Install system packages
-      ansible.builtin.command: pacstrap /mnt base linux linux-lts linux-firmware grub lvm2 neovim networkmanager openssh ansible
+      # sudo must be installed because we will lock the root account
+      ansible.builtin.command: pacstrap /mnt base linux linux-lts linux-firmware grub lvm2 sudo neovim networkmanager openssh ansible
 
     - name: UEFI - Install `efibootmgr`
       when: firmware == 'uefi'
@@ -227,14 +228,44 @@
         replace: '\1,discard\t'
 
     - name: root account - Generate password hash
+      # arch changes the password hashing algorithm from `sha512` to `yescript` (https://archlinux.org/news/changes-to-default-password-hashing-algorithm-and-umask-settings/)
+      # openssl does not support `yescript` yet, when it does update the `-6` flag to the one corresponding to `yescript`
       ansible.builtin.command: openssl passwd -6 "{{ password }}"
       register: passwd_hash
     - name: root acoount - Manually add the hashed password to `/etc/shadow`
-      # apparently for security reasons neither `ansible.builtin.user` or `ansible.builtin.shell` modules will not let you change the root password. Do it manually by editing `/etc/shadow`.
       ansible.builtin.replace:
         path: /mnt/etc/shadow
         regexp: (^root):([^:]*):(.*)
         replace: \1:{{ passwd_hash.stdout }}:\3
+
+    - name: user account - Create group
+      ansible.builtin.group:
+        name: "{{ user_name }}"
+    - name: user account - Generate password hash
+      # arch changes the password hashing algorithm from `sha512` to `yescript` (https://archlinux.org/news/changes-to-default-password-hashing-algorithm-and-umask-settings/)
+      # openssl does not support `yescript` yet, when it does update the `-6` flag to the one corresponding to `yescript`
+      ansible.builtin.command: "openssl passwd -6 {{ user_password }}"
+      register: user_password_hash
+    - name: user account - Create account
+      ansible.builtin.user:
+        name: "{{ user_name }}"
+        # primary group
+        group: "{{ user_name }}"
+        # supplementary groups --- https://wiki.archlinux.org/title/Users_and_groups#Group_list
+        # (`input` and `uinput` are required for `kmonad`)
+        groups: adm,wheel,input,uinput
+        # password hashed are stored in `/etc/shadow`
+        password: "{{ user_password_hash.stdout }}"
+        # the shell must be one of those listed in `/etc/shells`, zsh is not available yet
+        shell: /bin/bash
+    - name: user account - Create sudoers file
+      ansible.builtin.copy:
+        src: users/mabq/sudoers/mabq
+        # https://wiki.archlinux.org/title/Sudo#Configure_sudo_using_drop-in_files_in_/etc/sudoers.d
+        dest: /etc/sudoers.d/
+        owner: root
+        group: root
+        mode: 0440
 
     - name: Enable sshd and NetworkManager
       ansible.builtin.command: arch-chroot /mnt systemctl enable sshd NetworkManager

@@ -2,8 +2,8 @@
 
 I like Archlinux a lot but I don't want to manually install it. To fully automate my setup I created 2 ansible scripts:
 
-1. [ansible-archlinux](https://github.com/mabq/ansible-archlinux) (this repo) - fully automates a [basic Archlinux installation](https://wiki.archlinux.org/title/Installation_guide), leaving the host ready to run the second script.
-2. [ansible-setup](https://github.com/mabq/ansible-setup) installs and configures all the tools I need.
+1. [ansible-arch-installation](https://github.com/mabq/ansible-arch-installation) (this repo) - fully automates a [basic Archlinux installation](https://wiki.archlinux.org/title/Installation_guide), leaving the host ready to run the second script.
+2. [ansible-post-installation](https://github.com/mabq/ansible-post-installation) installs and configures all the tools I need.
 
 
 ## Why two different scrips?
