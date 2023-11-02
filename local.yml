@@ -251,11 +251,9 @@
         replace: '\1,discard\t'
 
     - name: Setup hostname
-      ansible.builtin.command: arch-chroot /mnt hostnamectl set-hostname "{{ inventory_hostname }}"
-    # - name: Setup hostname
-    #   ansible.builtin.copy:
-    #     content: '{{ inventory_hostname }}'
-    #     dest: /mnt/etc/hostname
+      ansible.builtin.copy:
+        content: '{{ inventory_hostname }}'
+        dest: /mnt/etc/hostname
 
     - name: Setup timezone
       ansible.builtin.command: arch-chroot /mnt ln -sf /usr/share/zoneinfo/{{ timezone }} /etc/localtime
@@ -283,7 +281,7 @@
 
     - name: Enable `sshd` service
       # check if you can login with the useraccount, otherwise do this later
-      ansible.builtin.command: arch-chroot /mnt systemctl enable sshd NetworkManager
+      ansible.builtin.command: arch-chroot /mnt systemctl enable sshd
 
 
     # --- Initial ram filesystem ---
@@ -404,20 +402,21 @@
       # Archlinux changed the password hashing algorithm from `sha512` to `yescript` (https://archlinux.org/news/changes-to-default-password-hashing-algorithm-and-umask-settings/)
       # openssl does not support `yescript` yet, when it does update the `-6` flag to the one corresponding to `yescript`
       ansible.builtin.command: "openssl passwd -6 {{ password }}"
-      register: password_hash
+      register: user_password_hash
     - name: User account - create account
       ansible.builtin.user:
         name: "{{ username }}"
         # primary group
         group: "{{ username }}"
         # supplementary groups --- https://wiki.archlinux.org/title/Users_and_groups#Group_list
-        #   `wheel` is used by polkit for administrative tasks
-        #   `input` and `uinput` are required for `kmonad`
-        groups: adm,wheel,input,uinput
-        # password hashed are stored in `/etc/shadow`
-        password: "{{ password_hash.stdout }}"
-        # the shell must be one of those listed in `/etc/shells`, zsh is not available yet
-        shell: /bin/bash
+        groups: adm,wheel
+        # (for some reason setting the password this way does not work when doing this from the Live Environemnt)
+        # password: "{{ password_hash.stdout }}"
+    - name: User acount - manually add the hashed password to `/etc/shadow`
+      ansible.builtin.replace:
+        path: /mnt/etc/shadow
+        regexp: (^{{ username }}):([^:]*):(.*)
+        replace: \1:{{ user_password_hash.stdout }}:\3
     - name: User account - create sudoers file
       ansible.builtin.copy:
         # https://wiki.archlinux.org/title/Sudo#Configure_sudo_using_drop-in_files_in_/etc/sudoers.d
@@ -437,24 +436,25 @@
         # https://wiki.archlinux.org/title/Sudo#Sudoers_default_file_permissions
         mode: 0440
 
-    - name: Disable root login
-      # Reduce the surface for attacks
-      # https://wiki.archlinux.org/title/Sudo#Disable_root_login
-      # https://docs.ansible.com/ansible/latest/collections/ansible/builtin/user_module.html#parameter-password
-      ansible.builtin.user:
-        name: root
-        password: '!'
-    # - name: root account - Generate password hash
-    #   (In case you ever want to create a password for the root account, you must edit the shadow file manually)
-    #   # arch changes the password hashing algorithm from `sha512` to `yescript` (https://archlinux.org/news/changes-to-default-password-hashing-algorithm-and-umask-settings/)
-    #   # openssl does not support `yescript` yet, when it does update the `-6` flag to the one corresponding to `yescript`
-    #   ansible.builtin.command: openssl passwd -6 "{{ encryption_password }}"
-    #   register: passwd_hash
-    # - name: root acount - Manually add the hashed password to `/etc/shadow`
-    #   ansible.builtin.replace:
-    #     path: /mnt/etc/shadow
-    #     regexp: (^root):([^:]*):(.*)
-    #     replace: \1:{{ passwd_hash.stdout }}:\3
+    # - name: Disable root login
+    #   # Reduce the surface for attacks
+    #   # https://wiki.archlinux.org/title/Sudo#Disable_root_login
+    #   # https://docs.ansible.com/ansible/latest/collections/ansible/builtin/user_module.html#parameter-password
+    #   ansible.builtin.user:
+    #     name: root
+    #     password: '!'
+    #   
+    - name: root account - Generate password hash
+      # (In case you ever want to create a password for the root account, you must edit the shadow file manually)
+      # arch changes the password hashing algorithm from `sha512` to `yescript` (https://archlinux.org/news/changes-to-default-password-hashing-algorithm-and-umask-settings/)
+      # openssl does not support `yescript` yet, when it does update the `-6` flag to the one corresponding to `yescript`
+      ansible.builtin.command: openssl passwd -6 "{{ password }}"
+      register: root_password_hash
+    - name: root acount - Manually add the hashed password to `/etc/shadow`
+      ansible.builtin.replace:
+        path: /mnt/etc/shadow
+        regexp: (^root):([^:]*):(.*)
+        replace: \1:{{ root_password_hash.stdout }}:\3
 
     # --- Reboot and exit playbook
 
