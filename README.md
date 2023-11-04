@@ -1,6 +1,6 @@
 # Basic Archlinux installation with Ansible
 
-I like Archlinux a lot but I don't want to manually install it. To fully automate my setup I created 2 Ansible scripts:
+I like Archlinux a lot but I don't like to manually install it every time. To automate my setup I created 2 Ansible scripts:
 
 1. [ansible-arch-installation](https://github.com/mabq/ansible-arch-installation) (this repo) - fully automates a [basic Archlinux installation](https://wiki.archlinux.org/title/Installation_guide), leaving the host ready to run the second script.
 2. [ansible-post-installation](https://github.com/mabq/ansible-post-installation) installs and configures all the tools I need.
@@ -8,12 +8,14 @@ I like Archlinux a lot but I don't want to manually install it. To fully automat
 
 ## Why two different scrips?
 
-[Ansible](https://archlinux.org/packages/extra/any/ansible/) is not included in the Archlinux [installation image](https://archlinux.org/download/), so this playbook (`local.yml`) must be executed from a [controller node](https://docs.ansible.com/ansible/latest/getting_started/index.html#getting-started-with-ansible). The post-installation script can be executed locally with `ansible-pull`, more details on that repository.
+[Ansible](https://archlinux.org/packages/extra/any/ansible/) is not included in the Archlinux [installation image](https://archlinux.org/download/), so this playbook (`local.yml`) must be executed from a [controller](https://docs.ansible.com/ansible/latest/getting_started/index.html#getting-started-with-ansible) machine. The second script can be executed locally with `ansible-pull`.
 
 
 ## Why not the `archinstall` script 
 
-While the `archinstall` script makes things much easier, most of the times I tried to run it with encryption enabled it fails. It also won't allow you setup things like LVM or the size of the swap.
+Most of the times I tried to run the script with disk encryption enabled, it fails. More importantly, with Ansible you are not limited to the predefined set of options offered by the script, you can literally do whatever you want, like setting up LVM, adjust the swap size, etc.
+
+The second script should work regardless of the installation method.
 
 
 ## About this script
@@ -22,16 +24,20 @@ While the `archinstall` script makes things much easier, most of the times I tri
    - Securely erase the disk before installation (`false` by default, if enabled the playbook will take several hours to complete even on SSDs).
    - Detects the firmware type and creates partitions accordingly.
    - Encrypts the root partition using [LUKS](https://wiki.archlinux.org/title/Dm-crypt/Encrypting_an_entire_system#LVM_on_LUKS) and configures two [LVM](https://wiki.archlinux.org/title/LVM) logical volumes (on top of it), one for root `/` (32gb by default) and one for `/home` (remaining disk space).
-   - Installs only the basic packages.
+   - Installs only basic packages and Ansible.
    - Performs basic configurations:
      - Detects disk type and enables TRIM if supported.
      - Enables `sshd` and `NetworkManager` services.
      - Sets the console keymap.
      - Configures the locales.
-     - Sets the `hostname`.
-     - Generate the initial RAM filesystem for both kernels (`linux` and `linux-lts`). Automatically adds a key file so you won't need to type the disk encryption password during the boot process.
+     - Sets the hostname.
+     - Generates the initial RAM file system for both kernels (`linux` and `linux-lts`). Automatically adds a key file so you won't need to type the disk encryption password during the boot process.
      - Configures GRUB as the boot loader.
      - Optionally sets up a swap file.
+     - Creates the user account (the username must be passed as a command-line argument)
+     - Disables root login (by default. When set to false, the encryption password will be used as root password)
+
+> Some actions in this script use the `ansible.builtin.command` module instead of the specialized module for that type of action, this is because the specialized module would affect the Live Environment, not the actual installation. For example, the `ansible.builtin.user` module would create the user in the Live Environment instead of the actual installation. 
 
 
 ## Before running the script
@@ -71,7 +77,7 @@ While the `archinstall` script makes things much easier, most of the times I tri
 
      - `target_disk` --- use `fdisk -l` on the managed node to identify the target disk block device name
 
-     - `password` --- is the password for the user account
+     - `password` --- is the password for the user account (the username must be passed as a command-line argument), see below how to encrypt a variable value
 
      - `encryption_password` --- is the password used to encrypt the disk, make sure it is long and random (this password will also be used to automatically decrypt the contents of the second script)
 
@@ -104,7 +110,7 @@ Change directory into the cloned repository and run:
 
 You will be prompted for the root password of the managed node (the one you just changed).
 
-If no errors occur the managed node will shutdown automatically after a succesful installation.
+If no errors occur the managed node will shutdown automatically after a successful installation.
 
 Remove install media and turn it back on.
 

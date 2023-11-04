@@ -214,16 +214,18 @@
         fstype: ext4
         state: mounted
 
-    # --- Packages installation ---
+
+    # --- Install packages ---
 
     - name: Notify section
       ansible.builtin.debug:
-        msg: "============================== PACKAGES INSTALLATION =============================="
+        msg: "============================== INSTALL PACKAGES =============================="
 
-    - name: Packages installation
-      # `sudo` is required now because we will disable root login
-      # check if you can ssh with the user account, otherwise install ssh in the second script
-      ansible.builtin.command: pacstrap /mnt base linux linux-lts linux-firmware grub lvm2 sudo neovim networkmanager openssh ansible
+    - name: Install packages
+      # because of `disable-root-login`, `sudo` is required now
+      # decided not to include the `linux-lts` kernel to avoid having to change the kernel on every boot 
+      # ansible.builtin.command: pacstrap /mnt base linux linux-lts linux-firmware grub lvm2 sudo neovim networkmanager openssh ansible
+      ansible.builtin.command: pacstrap /mnt base linux linux-firmware grub lvm2 sudo neovim networkmanager openssh ansible
 
     - name: Install `efibootmgr` (UEFI only)
       when: firmware == 'uefi'
@@ -280,7 +282,6 @@
       ansible.builtin.command: arch-chroot /mnt systemctl enable NetworkManager
 
     - name: Enable `sshd` service
-      # check if you can login with the useraccount, otherwise do this later
       ansible.builtin.command: arch-chroot /mnt systemctl enable sshd
 
 
@@ -316,8 +317,8 @@
 
     - name: initramfs - Generate the initial ramdisk image for `linux`
       ansible.builtin.command: arch-chroot /mnt mkinitcpio -p linux
-    - name: initramfs - Generate the initial ramdisk image for `linux-lts`
-      ansible.builtin.command: arch-chroot /mnt mkinitcpio -p linux-lts
+    # - name: initramfs - Generate the initial ramdisk image for `linux-lts`
+    #   ansible.builtin.command: arch-chroot /mnt mkinitcpio -p linux-lts
 
 
     # --- Bootloader ---
@@ -362,99 +363,98 @@
       ansible.builtin.command: "arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg"
 
 
-    # --- Enable swap ---
+    # --- Enable SWAP ---
 
     - name: Notify section
       ansible.builtin.debug:
         msg: "============================== ENABLE SWAP =============================="
 
-    - name: Enable swap
+    - name: Enable SWAP
       when: swap_size_in_mb > 0
       block:
-      - name: Swap - Create empty file of desired size
+      - name: SWAP - Create empty file of desired size
         ansible.builtin.command: arch-chroot /mnt dd if=/dev/zero of=/swapfile bs=1M count={{ swap_size_in_mb }} status=progress
-      - name: Swap - Change file permissions
+      - name: SWAP - Change file permissions
         ansible.builtin.command: arch-chroot /mnt chmod 600 /swapfile
-      - name: Swap - Set file as swap file
+      - name: SWAP - Set file as swap file
         ansible.builtin.command: arch-chroot /mnt mkswap /swapfile
-      - name: Swap - Include swap file in `/etc/fstab`
+      - name: SWAP - Include swap file in `/etc/fstab`
         lineinfile:
           path: /mnt/etc/fstab
           line: "/swapfile none swap sw 0 0"
-      - name: Swap - Check fstab file correctness
+      - name: SWAP - Check fstab file correctness
         ansible.builtin.command: arch-chroot /mnt mount -a
-      - name: Swap - Enable
+      - name: SWAP - Enable
         ansible.builtin.command: arch-chroot /mnt swapon -a
 
 
-    # --- User accounts ---
-    #     the root user is disabled by default
-    #     the user account will have super user privileges
+    # --- User account ---
 
     - name: Notify section
       ansible.builtin.debug:
-        msg: "============================== USER ACCOUNTS =============================="
+        msg: "============================== USER ACCOUNT =============================="
 
-    - name: User account - create group
-      ansible.builtin.group:
-        name: "{{ username }}"
-    - name: User account - generate password hash
-      # Archlinux changed the password hashing algorithm from `sha512` to `yescript` (https://archlinux.org/news/changes-to-default-password-hashing-algorithm-and-umask-settings/)
-      # openssl does not support `yescript` yet, when it does update the `-6` flag to the one corresponding to `yescript`
-      ansible.builtin.command: "openssl passwd -6 {{ password }}"
-      register: user_password_hash
+    - name: User account - hash the password
+      # Archlinux changed the password hashing algorithm from `sha512` to `yescript` (https://archlinux.org/news/changes-to-default-password-hashing-algorithm-and-umask-settings/). Openssl does not support `yescript` yet, when it does update the `-6` flag to the one corresponding to `yescript`. Whenever you change the password within the system using the `passwd` command, the new password will be automatically hashed with the new algorithm.
+      ansible.builtin.command: openssl passwd -6 "{{ password }}"
+      register: password_hash
     - name: User account - create account
-      ansible.builtin.user:
-        name: "{{ username }}"
-        # primary group
-        group: "{{ username }}"
-        # supplementary groups --- https://wiki.archlinux.org/title/Users_and_groups#Group_list
-        groups: adm,wheel
-        # (for some reason setting the password this way does not work when doing this from the Live Environemnt)
-        # password: "{{ password_hash.stdout }}"
-    - name: User acount - manually add the hashed password to `/etc/shadow`
-      ansible.builtin.replace:
-        path: /mnt/etc/shadow
-        regexp: (^{{ username }}):([^:]*):(.*)
-        replace: \1:{{ user_password_hash.stdout }}:\3
-    - name: User account - create sudoers file
+      # cannot do with the user module because of the Live Environment, must be done manually
+      # supplementary groups --- https://wiki.archlinux.org/title/Users_and_groups#Group_list
+      ansible.builtin.command: "arch-chroot /mnt useradd {{ username }} --create-home --user-group --groups adm,wheel --password {{ password_hash.stdout }} "
+
+    - name: User account - give passwordless sudo access
+      # https://wiki.archlinux.org/title/Sudo#Configure_sudo_using_drop-in_files_in_/etc/sudoers.d
       ansible.builtin.copy:
-        # https://wiki.archlinux.org/title/Sudo#Configure_sudo_using_drop-in_files_in_/etc/sudoers.d
         content: "{{ username }} ALL=(ALL:ALL) NOPASSWD: ALL"
-        dest: "/etc/sudoers.d/{{ username }}"
-        owner: root
-        group: root
-        # https://wiki.archlinux.org/title/Sudo#Sudoers_default_file_permissions
-        mode: 0440
-    - name: User account - create the `.vault_key` file in the users home directory
+        dest: /mnt/etc/sudoers.d/{{ username }}
+
+    - name: User account - create vault_key file in user's home directory
       # This will allow us to run the second script without manually creating this file
       ansible.builtin.copy:
         content: "{{ encryption_password }}"
-        dest: "/home/{{ username }}/.vault_key"
-        owner: root
-        group: root
-        # https://wiki.archlinux.org/title/Sudo#Sudoers_default_file_permissions
-        mode: 0440
+        dest: /mnt/home/{{ username }}/.vault_key
+        # the module fails when trying to set the following, have to do it manually below
+        # group: "{{ username }}"
+        # owner: "{{ username }}"
+        # mode: '0400'
+    - name: Set mode, owner, and group on the vault_key file
+      command: arch-chroot /mnt {{ item }}
+      loop:
+        - chmod 0400 /home/{{ username }}/.vault_key
+        - chown {{ username }}:{{ username }} /home/{{ username }}/.vault_key
 
-    # - name: Disable root login
-    #   # Reduce the surface for attacks
-    #   # https://wiki.archlinux.org/title/Sudo#Disable_root_login
-    #   # https://docs.ansible.com/ansible/latest/collections/ansible/builtin/user_module.html#parameter-password
-    #   ansible.builtin.user:
-    #     name: root
-    #     password: '!'
-    #   
-    - name: root account - Generate password hash
-      # (In case you ever want to create a password for the root account, you must edit the shadow file manually)
-      # arch changes the password hashing algorithm from `sha512` to `yescript` (https://archlinux.org/news/changes-to-default-password-hashing-algorithm-and-umask-settings/)
-      # openssl does not support `yescript` yet, when it does update the `-6` flag to the one corresponding to `yescript`
-      ansible.builtin.command: openssl passwd -6 "{{ password }}"
-      register: root_password_hash
-    - name: root acount - Manually add the hashed password to `/etc/shadow`
+
+    # --- Root account ---
+
+    - name: Notify section
+      ansible.builtin.debug:
+        msg: "============================== ROOT ACCOUNT =============================="
+       
+    - name: Enable root login
+      when: not disable_root_login
+      block:
+      - name: root account - generate password hash
+        # Archlinux changed the password hashing algorithm from `sha512` to `yescript` (https://archlinux.org/news/changes-to-default-password-hashing-algorithm-and-umask-settings/). Openssl does not support `yescript` yet, when it does update the `-6` flag to the one corresponding to `yescript`. Whenever you change the password within the system using the `passwd` command, the new password will be automatically hashed with the new algorithm.
+        ansible.builtin.command: openssl passwd -6 "{{ encryption_password }}"
+        register: encryption_password_hash
+      - name: root account - manually add the hashed password to `/etc/shadow`
+        # for the root user we must edit the shadow file manually, for some reason the `ansible.builtin.user` module won't work for root in the Live Environment
+        ansible.builtin.replace:
+          path: /mnt/etc/shadow
+          regexp: (^root):([^:]*):(.*)
+          replace: \1:{{ encryption_password_hash.stdout }}:\3
+
+    - name: Disable root login
+      when: disable_root_login
+      # https://wiki.archlinux.org/title/Sudo#Disable_root_login
+      # https://docs.ansible.com/ansible/latest/collections/ansible/builtin/user_module.html#parameter-password
+      # for the root user we must edit the shadow file manually, for some reason the `ansible.builtin.user` module won't work for root in the Live Environment
       ansible.builtin.replace:
         path: /mnt/etc/shadow
         regexp: (^root):([^:]*):(.*)
-        replace: \1:{{ root_password_hash.stdout }}:\3
+        replace: \1:!:\3
+
 
     # --- Reboot and exit playbook
 

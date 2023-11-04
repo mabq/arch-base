@@ -26,6 +26,7 @@ encryption_password: !vault |
 # --- Hosts default variables
 #     Do not edit these variable here, overwrite them in the corresponding `host_vars/{HOSTNAME}.yml` file
 target_disk: /dev/sda  # will be different for nvme disks: see README.md
+disable_root_login: true  # when false the encryption password will be used as the root password
 secure_erase_disk: false  # if enabled, will take several hours to complete
 root_size_in_gb: 32G  # system disk size
 swap_size_in_mb: 4096  # swap size, use 0 for no swap or a multiple of 1024
@@ -42,3 +43,4 @@ locales:  # the first one is the default one
 #     `ansible.cfg` file but it still gives me an error when there is already an entry for
 #     the given host.
 ansible_ssh_common_args: -o "StrictHostKeyChecking no" -o "UserKnownHostsFile /dev/null"
+
