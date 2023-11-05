@@ -8,7 +8,7 @@
     - name: Security --- exit if not booted from arch install media
       when: ansible_nodename != 'archiso'
       ansible.builtin.fail:
-        msg: "This host is not booted from the Arch install media!"
+        msg: "This host is not running the Archlinux Live Environment"
 
 
     # --- Set variables ---
@@ -30,19 +30,19 @@
       ansible.builtin.debug:
         msg: "firmware = {{ firmware }}"
 
-    - name: Get installation target `disk_name`
+    - name: Get `device_name_descriptor`
       # get `sda` or `nvme0n1` from `/dev/sda` or `/dev/nvme0n1`
       # see: https://wiki.archlinux.org/title/Device_file#Block_devices
       ansible.builtin.set_fact:
-        disk_name: "{{ target_disk | split('/') | last }}"
-    - name: Print `disk_name`
+        device_name_descriptor: "{{ installation_block_device_name | split('/') | last }}"
+    - name: Print `device_name_descriptor`
       ansible.builtin.debug:
-        msg: "disk_name = {{ disk_name }}"
+        msg: "device_name_descriptor = {{ device_name_descriptor }}"
 
     - name: Get `disk_discard_support`
       # I don't have a PC with an nvme drive to test this now. For nvme disks this should be false because nvme has built in support for TRIM. Check this again whenever you have the oportunity.
       ansible.builtin.set_fact:
-        disk_discard_support: "{{ ansible_devices[disk_name]['support_discard'] != '0' }}"
+        disk_discard_support: "{{ ansible_devices[device_name_descriptor]['support_discard'] != '0' }}"
     - name: Print `disk_discard_support`
       ansible.builtin.debug:
         msg: "disk_discard_support = {{ disk_discard_support }}"
@@ -51,17 +51,17 @@
       ansible.builtin.set_fact:
         efi_partition_number: "{{ (firmware == 'uefi') | ternary('1', None) }}"
         boot_partition_number: "{{ (firmware == 'uefi') | ternary('2', '1') }}"
-        root_partition_number: "{{ (firmware == 'uefi') | ternary('3', '2') }}"
+        main_partition_number: "{{ (firmware == 'uefi') | ternary('3', '2') }}"
     - name: Prepend with "p" for disks names that end with a number
       # See `https://wiki.archlinux.org/title/Device_file#Partition`
-      when: disk_name | regex_search('[0-9]$')
+      when: device_name_descriptor | regex_search('[0-9]$')
       ansible.builtin.set_fact:
         efi_partition_number: "p{{ efi_partition_number }}"
         boot_partition_number: "p{{ boot_partition_number }}"
-        root_partition_number: "p{{ root_partition_number }}"
+        main_partition_number: "p{{ main_partition_number }}"
     - name: Print partition names
       ansible.builtin.debug:
-        msg: "efi_partition_number = {{ efi_partition_number }}, boot_partition_number = {{ boot_partition_number }}, root_partition_number = {{ root_partition_number }}"
+        msg: "efi_partition_number = {{ efi_partition_number }}, boot_partition_number = {{ boot_partition_number }}, main_partition_number = {{ main_partition_number }}"
 
 
     # --- Disk configuration ---
@@ -71,23 +71,23 @@
         msg: "============================== DISK CONFIGURATION =============================="
 
     - name: Wipe all disk partitions of the target disk
-      ansible.builtin.command: find /dev -wholename "{{ target_disk }}*" -exec wipefs --force --all {} \;
+      ansible.builtin.command: find /dev -wholename "{{ installation_block_device_name }}*" -exec wipefs --force --all {} \;
 
     - name: Securely erase disk (if instructed)
-      when: secure_erase_disk
+      when: securely_erase_disk
       block:
       - name: Info
         ansible.builtin.debug:
           msg: "About to write random data to the entire disk, will take several hours to complete"
       - name: Write random data to disk
-        ansible.builtin.command: dd if=/dev/urandom of={{ target_disk }}
+        ansible.builtin.command: dd if=/dev/urandom of={{ installation_block_device_name }}
 
     - name: UEFI - Disk partitions
       when: firmware == 'uefi'
       block:
       - name: UEFI - Create EFI partition
         community.general.parted:
-          device: "{{ target_disk }}"
+          device: "{{ installation_block_device_name }}"
           label: gpt
           number: "{{ efi_partition_number }}"
           part_end: 512MB
@@ -97,7 +97,7 @@
           state: present
       - name: UEFI - Create boot partition
         community.general.parted:
-          device: "{{ target_disk }}"
+          device: "{{ installation_block_device_name }}"
           label: gpt
           number: "{{ boot_partition_number }}"
           part_start: 512MB
@@ -105,11 +105,11 @@
           name: boot
           fs_type: ext4
           state: present
-      - name: UEFI - Create root partition
+      - name: UEFI - Create main partition
         community.general.parted:
-          device: '{{ target_disk }}'
+          device: '{{ installation_block_device_name }}'
           label: gpt
-          number: "{{ root_partition_number }}"
+          number: "{{ main_partition_number }}"
           part_start: 1536MB
           name: root
           flags: [lvm]
@@ -120,7 +120,7 @@
       block:
       - name: BIOS - Create boot partition
         community.general.parted:
-          device: "{{ target_disk }}"
+          device: "{{ installation_block_device_name }}"
           label: msdos
           number: "{{ boot_partition_number }}"
           part_end: 1024MB
@@ -128,41 +128,41 @@
           fs_type: ext4
           flags: [boot]
           state: present
-      - name: BIOS - Create root partition
+      - name: BIOS - Create main partition
         community.general.parted:
-          device: "{{ target_disk }}"
+          device: "{{ installation_block_device_name }}"
           label: msdos
-          number: "{{ root_partition_number }}"
+          number: "{{ main_partition_number }}"
           part_start: 1024MB
           #name: root
           flags: [lvm]
           state: present
 
-    - name: Encrypt root partition
+    - name: Encrypt main partition
       community.crypto.luks_device:
-        device: "{{ target_disk }}{{ root_partition_number }}"
+        device: "{{ installation_block_device_name }}{{ main_partition_number }}"
         type: luks2
         new_passphrase: "{{ encryption_password }}"
         state: opened
-        name: crypt
+        name: lvm
         passphrase: "{{ encryption_password }}"
 
     - name: LVM - Create volume group (physical volume is automatically created)
       community.general.lvg:
-        pvs: /dev/mapper/crypt
-        vg: vg0
+        pvs: /dev/mapper/lvm
+        vg: main
         pvresize: true
         state: active
 
     - name: LVM - Create 'root' logical volume
       community.general.lvol:
-        vg: vg0
+        vg: main
         lv: root
-        size: "{{ root_size_in_gb }}"
+        size: "{{ system_size_in_gb }}G"
         active: true
     - name: LVM - Create 'home' logical volume
       community.general.lvol:
-        vg: vg0
+        vg: main
         lv: home
         size: +100%FREE
         active: true
@@ -170,20 +170,20 @@
     - name: UEFI - Format EFI partition
       when: firmware == 'uefi'
       community.general.filesystem:
-        dev: "{{ target_disk }}{{ efi_partition_number }}"
+        dev: "{{ installation_block_device_name }}{{ efi_partition_number }}"
         fstype: vfat
         opts: '-F32'
     - name: Format boot partition
       community.general.filesystem:
-        dev: "{{ target_disk }}{{ boot_partition_number }}"
+        dev: "{{ installation_block_device_name }}{{ boot_partition_number }}"
         fstype: ext4
     - name: Format `root` logical volume
       community.general.filesystem:
-        dev: /dev/vg0/root
+        dev: /dev/main/root
         fstype: ext4
     - name: Format `home` logical volume
       community.general.filesystem:
-        dev: /dev/vg0/home
+        dev: /dev/main/home
         fstype: ext4
 
     - name: Create directory for '/home'
@@ -195,21 +195,21 @@
         path: /mnt/boot
         state: directory
 
-    - name: Mount root
+    - name: Mount the `root` logical volume to `/`
       ansible.posix.mount:
-        src: /dev/vg0/root
+        src: /dev/main/root
         path: /mnt
         fstype: ext4
         state: mounted
-    - name: Mount home
+    - name: Mount the `home` logical volumen to `/home`
       ansible.posix.mount:
-        src: /dev/vg0/home
+        src: /dev/main/home
         path: /mnt/home
         fstype: ext4
         state: mounted
-    - name: Mount boot
+    - name: Mount the boot partition to `/mnt/boot`
       ansible.posix.mount:
-        src: "{{ target_disk }}{{ boot_partition_number }}"
+        src: "{{ installation_block_device_name }}{{ boot_partition_number }}"
         path: /mnt/boot
         fstype: ext4
         state: mounted
@@ -222,10 +222,8 @@
         msg: "============================== INSTALL PACKAGES =============================="
 
     - name: Install packages
-      # because of `disable-root-login`, `sudo` is required now
-      # decided not to include the `linux-lts` kernel to avoid having to change the kernel on every boot 
-      # ansible.builtin.command: pacstrap /mnt base linux linux-lts linux-firmware grub lvm2 sudo neovim networkmanager openssh ansible
-      ansible.builtin.command: pacstrap /mnt base linux linux-firmware grub lvm2 sudo neovim networkmanager openssh ansible
+      # because of `disable-root-login`, `sudo` is required
+      ansible.builtin.command: pacstrap /mnt base linux linux-headers linux-lts linux-lts-headers linux-firmware grub lvm2 networkmanager sudo neovim openssh ansible
 
     - name: Install `efibootmgr` (UEFI only)
       when: firmware == 'uefi'
@@ -283,109 +281,6 @@
 
     - name: Enable `sshd` service
       ansible.builtin.command: arch-chroot /mnt systemctl enable sshd
-
-
-    # --- Initial ram filesystem ---
-    #     The initramfs is a temporary filesystem that is loaded into memory during
-    #     the boot process before the real root filesystem is mounted. We need to 
-    #     recreate the initramfs with support for LVM and disk encryption.
-
-    - name: Notify section
-      ansible.builtin.debug:
-        msg: "============================== INITRAMFS =============================="
-
-    - name: initramfs - create a key file to avoid typing the encryption password twice during boot
-      block:
-      - name: initramfs - create an empty file
-        ansible.builtin.shell: arch-chroot /mnt dd bs=512 count=4 if=/dev/urandom of=/crypto_keyfile.bin
-      - name: initramfs - append the encryption key to it
-        ansible.builtin.shell: echo "{{ encryption_password }}" | arch-chroot /mnt  cryptsetup luksAddKey {{ target_disk }}{{ root_partition_number }} /crypto_keyfile.bin -
-      - name: initramfs - remove all permissions for security reasons
-        ansible.builtin.command: arch-chroot /mnt chmod 000 /crypto_keyfile.bin
-
-    - name: initramfs - change configuration options for the `mkinitcpio` script
-      # mkinitcpio is a Bash script used to create an initial ramdisk environment
-      lineinfile:
-        dest: /mnt/etc/mkinitcpio.conf
-        regexp: '{{ item.regex }}'
-        line: '{{ item.line }}'
-      loop:
-        # add the key file
-        - { regex: ^FILES, line: FILES=(/crypto_keyfile.bin) }
-        # add teh `encrypt` and `lvm2` hooks
-        - { regex: ^HOOKS, line: HOOKS=(base udev autodetect modconf kms keyboard keymap consolefont block encrypt lvm2 filesystems fsck) }
-
-    - name: initramfs - Generate the initial ramdisk image for `linux`
-      ansible.builtin.command: arch-chroot /mnt mkinitcpio -p linux
-    # - name: initramfs - Generate the initial ramdisk image for `linux-lts`
-    #   ansible.builtin.command: arch-chroot /mnt mkinitcpio -p linux-lts
-
-
-    # --- Bootloader ---
-    #     https://wiki.archlinux.org/title/Arch_boot_process#Boot_loader
-
-    - name: Notify section
-      ansible.builtin.debug:
-        msg: "============================== BOOTLOADER =============================="
-
-    - name: Bootloader (UEFI) - create '/boot/EFI' directory
-      when: firmware == 'uefi'
-      ansible.builtin.file:
-        path: /mnt/boot/EFI
-        state: directory
-    - name: Bootloader (UEFI) - mount EFI partition
-      when: firmware == 'uefi'
-      ansible.posix.mount:
-        src: "{{ target_disk }}{{ efi_partition_number }}"
-        path: /mnt/boot/EFI
-        fstype: vfat
-        state: mounted
-
-    - name: Bootloader (UEFI) - install grub
-      when: firmware == 'uefi'
-      ansible.builtin.command: "arch-chroot /mnt grub-install --target=x86_64-efi --recheck {{ target_disk }}"
-    - name: Bootloader (BIOS) - install grub
-      when: firmware == 'bios'
-      ansible.builtin.command: "arch-chroot /mnt grub-install --target=i386-pc --recheck {{ target_disk }}"
-
-    - name: Bootloader - Configure GRUB
-      lineinfile:
-        dest: /mnt/etc/default/grub
-        regexp: '{{ item.regex }}'
-        line: '{{ item.line }}'
-      loop:
-        # enable encryption
-        - { regex: ^#GRUB_ENABLE_CRYPTODISK, line: GRUB_ENABLE_CRYPTODISK=y }
-        # enable TRIM (if supported) and encryption
-        - { regex: ^GRUB_CMDLINE_LINUX="", line: "GRUB_CMDLINE_LINUX=\"{{ disk_discard_support | ternary('cryptdevice={{ target_disk }}{{ root_partition_number }}:crypt:allow-discards', 'cryptdevice={{ target_disk }}{{ root_partition_number }}:crypt') }}\"" }
-
-    - name: Bootloader - generate boot loader file
-      ansible.builtin.command: "arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg"
-
-
-    # --- Enable SWAP ---
-
-    - name: Notify section
-      ansible.builtin.debug:
-        msg: "============================== ENABLE SWAP =============================="
-
-    - name: Enable SWAP
-      when: swap_size_in_mb > 0
-      block:
-      - name: SWAP - Create empty file of desired size
-        ansible.builtin.command: arch-chroot /mnt dd if=/dev/zero of=/swapfile bs=1M count={{ swap_size_in_mb }} status=progress
-      - name: SWAP - Change file permissions
-        ansible.builtin.command: arch-chroot /mnt chmod 600 /swapfile
-      - name: SWAP - Set file as swap file
-        ansible.builtin.command: arch-chroot /mnt mkswap /swapfile
-      - name: SWAP - Include swap file in `/etc/fstab`
-        lineinfile:
-          path: /mnt/etc/fstab
-          line: "/swapfile none swap sw 0 0"
-      - name: SWAP - Check fstab file correctness
-        ansible.builtin.command: arch-chroot /mnt mount -a
-      - name: SWAP - Enable
-        ansible.builtin.command: arch-chroot /mnt swapon -a
 
 
     # --- User account ---
@@ -454,6 +349,111 @@
         path: /mnt/etc/shadow
         regexp: (^root):([^:]*):(.*)
         replace: \1:!:\3
+
+
+    # --- Initial ram filesystem ---
+    #     The initramfs is a temporary filesystem that is loaded into memory during
+    #     the boot process before the real root filesystem is mounted. We need to 
+    #     recreate the initramfs with support for LVM and disk encryption.
+
+    - name: Notify section
+      ansible.builtin.debug:
+        msg: "============================== INITRAMFS =============================="
+
+    - name: initramfs - create a key file to avoid typing the encryption password twice during boot
+      block:
+      - name: initramfs - create an empty file
+        ansible.builtin.shell: arch-chroot /mnt dd bs=512 count=4 if=/dev/urandom of=/crypto_keyfile.bin
+      - name: initramfs - append the encryption key to it
+        ansible.builtin.shell: echo "{{ encryption_password }}" | arch-chroot /mnt  cryptsetup luksAddKey {{ installation_block_device_name }}{{ main_partition_number }} /crypto_keyfile.bin -
+      - name: initramfs - remove all permissions for security reasons
+        ansible.builtin.command: arch-chroot /mnt chmod 000 /crypto_keyfile.bin
+
+    - name: initramfs - change configuration options for the `mkinitcpio` script
+      # mkinitcpio is a Bash script used to create an initial ramdisk environment
+      lineinfile:
+        dest: /mnt/etc/mkinitcpio.conf
+        regexp: '{{ item.regex }}'
+        line: '{{ item.line }}'
+      loop:
+        # add the key file
+        - { regex: ^FILES, line: FILES=(/crypto_keyfile.bin) }
+        # add teh `encrypt` and `lvm2` hooks
+        - { regex: ^HOOKS, line: HOOKS=(base udev autodetect modconf kms keyboard keymap consolefont block encrypt lvm2 filesystems fsck) }
+
+    - name: initramfs - Generate the initial ramdisk image for `linux`
+      ansible.builtin.command: arch-chroot /mnt mkinitcpio -p linux
+    - name: initramfs - Generate the initial ramdisk image for `linux-lts`
+      ansible.builtin.command: arch-chroot /mnt mkinitcpio -p linux-lts
+
+
+    # --- Bootloader ---
+    #     https://wiki.archlinux.org/title/Arch_boot_process#Boot_loader
+
+    - name: Notify section
+      ansible.builtin.debug:
+        msg: "============================== BOOTLOADER =============================="
+
+    - name: Bootloader (UEFI) - Create '/boot/EFI' directory
+      when: firmware == 'uefi'
+      ansible.builtin.file:
+        path: /mnt/boot/EFI
+        state: directory
+    - name: Bootloader (UEFI) - Mount EFI partition
+      when: firmware == 'uefi'
+      ansible.posix.mount:
+        src: "{{ installation_block_device_name }}{{ efi_partition_number }}"
+        path: /mnt/boot/EFI
+        fstype: vfat
+        state: mounted
+
+    - name: Bootloader (BIOS) - Install GRUB in the master boot record
+      when: firmware == 'bios'
+      # pass a disk as an argument, not a partition
+      ansible.builtin.command: "arch-chroot /mnt grub-install --target=i386-pc --recheck {{ installation_block_device_name }}"
+    - name: Bootloader (UEFI) - Install GRUB in the master boot record
+      when: firmware == 'uefi'
+      # pass a disk as an argument, not a partition
+      ansible.builtin.command: "arch-chroot /mnt grub-install --target=x86_64-efi --recheck {{ installation_block_device_name }}"
+
+    - name: Bootloader - Configure GRUB to unlock the encrypted partiton at boot time and to allow-discards (if supported)
+      lineinfile:
+        dest: /mnt/etc/default/grub
+        regexp: '{{ item.regex }}'
+        line: '{{ item.line }}'
+      loop:
+        # enable encryption
+        - { regex: ^#GRUB_ENABLE_CRYPTODISK, line: GRUB_ENABLE_CRYPTODISK=y }
+        # enable TRIM (if supported) and encryption
+        - { regex: ^GRUB_CMDLINE_LINUX="", line: "GRUB_CMDLINE_LINUX=\"{{ disk_discard_support | ternary('cryptdevice={{ installation_block_device_name }}{{ main_partition_number }}:lvm:allow-discards', 'cryptdevice={{ installation_block_device_name }}{{ main_partition_number }}:lvm') }}\"" }
+
+    - name: Bootloader - Generate the GRUB configuration file
+      ansible.builtin.command: "arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg"
+
+
+    # --- Enable SWAP ---
+
+    - name: Notify section
+      ansible.builtin.debug:
+        msg: "============================== ENABLE SWAP =============================="
+
+    - name: Enable SWAP
+      when: swap_size_in_mb > 0
+      block:
+      - name: SWAP - Create empty file of desired size
+        ansible.builtin.command: arch-chroot /mnt dd if=/dev/zero of=/swapfile bs=1M count={{ swap_size_in_mb }} status=progress
+      - name: SWAP - Change file permissions
+        ansible.builtin.command: arch-chroot /mnt chmod 600 /swapfile
+      - name: SWAP - Set file as swap file
+        ansible.builtin.command: arch-chroot /mnt mkswap /swapfile
+      - name: SWAP - Include swap file in `/etc/fstab`
+        lineinfile:
+          path: /mnt/etc/fstab
+          line: "/swapfile none swap sw 0 0"
+      - name: SWAP - Check fstab file correctness
+        ansible.builtin.command: arch-chroot /mnt mount -a
+      - name: SWAP - Enable
+        ansible.builtin.command: arch-chroot /mnt swapon -a
 
 
     # --- Reboot and exit playbook

@@ -10,32 +10,40 @@ I like Archlinux a lot but I don't like to manually install it every time. To au
 
 [Ansible](https://archlinux.org/packages/extra/any/ansible/) is not included in the Archlinux [installation image](https://archlinux.org/download/), so this playbook (`local.yml`) must be executed from a [controller](https://docs.ansible.com/ansible/latest/getting_started/index.html#getting-started-with-ansible) machine. The second script can be executed locally with `ansible-pull`.
 
+The second script should work regardless of how you install Archlinux (via this script or via the `archinstall` script).
+
 
 ## Why not the `archinstall` script 
 
-Most of the times I tried to run the script with disk encryption enabled, it fails. More importantly, with Ansible you are not limited to the predefined set of options offered by the script, you can literally do whatever you want, like setting up LVM, adjust the swap size, etc.
-
-The second script should work regardless of the installation method.
+It fails with disk encryption enabled, but more importantly, with Ansible you are not limited to the predefined set of options offered by the `archinstall` script, you can literally do whatever you want, like setting up LVM, adjust the swap size, etc.
 
 
 ## About this script
 
-   - Executes only if the managed node was booted from the Arch installation image (avoid accidental executions).
-   - Securely erase the disk before installation (`false` by default, if enabled the playbook will take several hours to complete even on SSDs).
-   - Detects the firmware type and creates partitions accordingly.
-   - Encrypts the root partition using [LUKS](https://wiki.archlinux.org/title/Dm-crypt/Encrypting_an_entire_system#LVM_on_LUKS) and configures two [LVM](https://wiki.archlinux.org/title/LVM) logical volumes (on top of it), one for root `/` (32gb by default) and one for `/home` (remaining disk space).
-   - Installs only basic packages and Ansible.
+   - Executes only if the managed node was booted from the Arch installation image to avoid running this script against an undesired node.
+   - Configures the disk:
+     - Securely erases the disk before installation (customizable, `false` by default).
+     - Creates the required disk partitions depending on the motherboard's firmware type.
+       - UEFI: 3 partitions (UEFI, boot, main)
+       - BIOS: 2 partitions (boot, main)
+     - Encrypts the main partition using [LUKS](https://wiki.archlinux.org/title/Dm-crypt/Encrypting_an_entire_system#LVM_on_LUKS).
+     - Creates a [LVM](https://wiki.archlinux.org/title/LVM) volume group called `main` in the `main` partiton.
+     - Creates 2 logical volumes in the `main` volume group:
+       - `root` where `/` will be mounted (32gb by default, customizable)
+       - `home` where `/home` will be mounted (remaining disk space).
+   - Installs basic packages (see the "Install packages" section).
    - Performs basic configurations:
-     - Detects disk type and enables TRIM if supported.
-     - Enables `sshd` and `NetworkManager` services.
-     - Sets the console keymap.
-     - Configures the locales.
-     - Sets the hostname.
-     - Generates the initial RAM file system for both kernels (`linux` and `linux-lts`). Automatically adds a key file so you won't need to type the disk encryption password during the boot process.
+     - Generates the `/etc/fstab` file (enables TRIM if supported)
+     - Sets the console keymap (customizable)
+     - Sets the hostname (customizable)
+     - Sets the time-zome (customizable)
+     - Generates the locales (customizable)
+     - Enables `sshd` and `NetworkManager` services
+     - Creates the user account (with sudo access. Create a `.vault_key` file in the user's home directory with the encryption key)
+     - Disables root login (customizable, when set to false the encryption password will be used as root password)
+     - Configures a SWAP file (customizable)
+     - Generates the initial RAM file system for both kernels (`linux` and `linux-lts`). Automatically adds a key file so you won't need to type the disk encryption password during the boot process (all permissions are removed from the key file for security purposes).
      - Configures GRUB as the boot loader.
-     - Optionally sets up a swap file.
-     - Creates the user account (the username must be passed as a command-line argument)
-     - Disables root login (by default. When set to false, the encryption password will be used as root password)
 
 > Some actions in this script use the `ansible.builtin.command` module instead of the specialized module for that type of action, this is because the specialized module would affect the Live Environment, not the actual installation. For example, the `ansible.builtin.user` module would create the user in the Live Environment instead of the actual installation. 
 
@@ -75,7 +83,7 @@ The second script should work regardless of the installation method.
 
    - Check the variables defined in the `group_vars/all.yml` file, specially:
 
-     - `target_disk` --- use `fdisk -l` on the managed node to identify the target disk block device name
+     - `target_disk` --- use `fdisk -l` on the managed node to identify the [block device name](https://wiki.archlinux.org/title/Device_file#Block_devices)
 
      - `password` --- is the password for the user account (the username must be passed as a command-line argument), see below how to encrypt a variable value
 

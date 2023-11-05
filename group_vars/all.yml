@@ -1,10 +1,11 @@
 # --- Notes:
-#     The `username` variable must be passed via command-line arguments (for security reasons).
+#     The `username` variable must be passed via command-line arguments for security reasons, see README.
 
 
 # --- Encrypted variables
+#     See README for instructions to encrypt values in Ansible
 #     Change them here to apply to all hosts or in the corresponging `host_vars/{HOSTNAME}.yml` file
-#     See the README.md file for instructions to encrypt values in Ansible
+#     user password:
 password: !vault |
           $ANSIBLE_VAULT;1.1;AES256
           31323138626364626366653238356564386439303562376331313537323338386135653937663166
@@ -12,6 +13,7 @@ password: !vault |
           62323265303732663163396439646533313765643034356130383232616634643330623862633436
           6137353731656561330a386132316232366130623831626663393965666131383265626635333431
           6662
+#     disk encryption password (if `disable_root_login` is set to `false` this will also be used as the root password)
 encryption_password: !vault |
           $ANSIBLE_VAULT;1.1;AES256
           66363937626135333661653134623362326264333964316365373865353261323766313037326263
@@ -23,13 +25,13 @@ encryption_password: !vault |
           306230343666326337313231383033636534
 
 
-# --- Hosts default variables
-#     Do not edit these variable here, overwrite them in the corresponding `host_vars/{HOSTNAME}.yml` file
-target_disk: /dev/sda  # will be different for nvme disks: see README.md
+# --- Hosts-default variables
+#     Do not edit these variables here, overwrite them in the corresponding `host_vars/{HOSTNAME}.yml` file
+installation_block_device_name: /dev/sda  # will be different for nvme disks, use `lsblk -f` to identify the 
+system_size_in_gb: 32  # size for the system logical volume, user files will be stored on another logical volume (remainder space)
+swap_size_in_mb: 4096  # use 0 for no swap or a multiple of 1024
 disable_root_login: true  # when false the encryption password will be used as the root password
-secure_erase_disk: false  # if enabled, will take several hours to complete
-root_size_in_gb: 32G  # system disk size
-swap_size_in_mb: 4096  # swap size, use 0 for no swap or a multiple of 1024
+securely_erase_disk: false  # if enabled, will take several hours to complete
 console_keymap: us  # https://wiki.archlinux.org/title/Linux_console/Keyboard_configuration
 timezone: 'America/Guayaquil'
 locales:  # the first one is the default one
