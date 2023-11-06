@@ -261,7 +261,7 @@
       ansible.builtin.command: arch-chroot /mnt hwclock --systohc
 
     - name: Locales - enable locales desired locales
-      lineinfile:
+      ansible.builtin.lineinfile:
         dest: /mnt/etc/locale.gen
         regexp: '#{{ item }}\.UTF-8 UTF-8'
         line: '{{ item }}.UTF-8 UTF-8'
@@ -314,7 +314,7 @@
         # owner: "{{ username }}"
         # mode: '0400'
     - name: Set mode, owner, and group on the vault_key file
-      command: arch-chroot /mnt {{ item }}
+      ansible.builtin.command: arch-chroot /mnt {{ item }}
       loop:
         - chmod 0400 /home/{{ username }}/.vault_key
         - chown {{ username }}:{{ username }} /home/{{ username }}/.vault_key
@@ -371,7 +371,7 @@
 
     - name: initramfs - change configuration options for the `mkinitcpio` script
       # mkinitcpio is a Bash script used to create an initial ramdisk environment
-      lineinfile:
+      ansible.builtin.lineinfile:
         dest: /mnt/etc/mkinitcpio.conf
         regexp: '{{ item.regex }}'
         line: '{{ item.line }}'
@@ -417,7 +417,7 @@
       ansible.builtin.command: "arch-chroot /mnt grub-install --target=x86_64-efi --recheck {{ installation_block_device_name }}"
 
     - name: Bootloader - Configure GRUB to unlock the encrypted partiton at boot time and to allow-discards (if supported)
-      lineinfile:
+      ansible.builtin.lineinfile:
         dest: /mnt/etc/default/grub
         regexp: '{{ item.regex }}'
         line: '{{ item.line }}'
@@ -447,7 +447,7 @@
       - name: SWAP - Set file as swap file
         ansible.builtin.command: arch-chroot /mnt mkswap /swapfile
       - name: SWAP - Include swap file in `/etc/fstab`
-        lineinfile:
+        ansible.builtin.lineinfile:
           path: /mnt/etc/fstab
           line: "/swapfile none swap sw 0 0"
       - name: SWAP - Check fstab file correctness

@@ -1,4 +1,4 @@
-# Basic Archlinux installation with Ansible
+# Ansible Arch Installation Script
 
 I like Archlinux a lot but I don't like to manually install it every time. To automate my setup I created 2 Ansible scripts:
 
