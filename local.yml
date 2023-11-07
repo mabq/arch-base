@@ -222,7 +222,8 @@
         msg: "============================== INSTALL PACKAGES =============================="
 
     - name: Install packages
-      # because of `disable-root-login`, `sudo` is required
+      # `sudo` is required in case of disable-root-login
+      # `git` is required to run `ansible-pull` on the second script
       ansible.builtin.command: pacstrap /mnt base linux linux-headers linux-lts linux-lts-headers linux-firmware grub lvm2 networkmanager sudo neovim openssh ansible
 
     - name: Install `efibootmgr` (UEFI only)
