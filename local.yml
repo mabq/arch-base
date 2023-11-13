@@ -221,10 +221,13 @@
       ansible.builtin.debug:
         msg: "============================== INSTALL PACKAGES =============================="
 
-    - name: Install packages
+    - name: Install base packages
+      ansible.builtin.command: pacstrap /mnt base linux linux-headers linux-lts linux-lts-headers linux-firmware grub lvm2 networkmanager
+
+    - name: Install basic tools
       # `sudo` is required in case of disable-root-login
       # `git` is required to run `ansible-pull` on the second script
-      ansible.builtin.command: pacstrap /mnt base linux linux-headers linux-lts linux-lts-headers linux-firmware grub lvm2 networkmanager sudo neovim openssh ansible git
+      ansible.builtin.command: pacstrap /mnt sudo neovim openssh ansible git
 
     - name: Install `efibootmgr` (UEFI only)
       when: firmware == 'uefi'
