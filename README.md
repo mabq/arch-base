@@ -42,7 +42,7 @@ It fails with disk encryption enabled, but more importantly, with Ansible you ar
      - Creates the user account (with sudo access. Create a `.vault_key` file in the user's home directory with the encryption key)
      - Disables root login (customizable, when set to false the encryption password will be used as root password)
      - Configures a SWAP file (customizable)
-     - Generates the initial RAM file system for both kernels (`linux` and `linux-lts`). Automatically adds a key file so you won't need to type the disk encryption password during the boot process (all permissions are removed from the key file for security purposes).
+     - Generates the initial RAM file system. Automatically adds a key file so you won't need to type the disk encryption password during the boot process (all permissions are removed from the key file for security purposes).
      - Configures GRUB as the boot loader.
 
 > Some actions in this script use the `ansible.builtin.command` module instead of the specialized module for that type of action, this is because the specialized module would affect the Live Environment, not the actual installation. For example, the `ansible.builtin.user` module would create the user in the Live Environment instead of the actual installation. 

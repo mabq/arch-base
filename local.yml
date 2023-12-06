@@ -222,7 +222,7 @@
         msg: "============================== INSTALL PACKAGES =============================="
 
     - name: Install base packages
-      ansible.builtin.command: pacstrap /mnt base linux linux-headers linux-lts linux-lts-headers linux-firmware grub lvm2 networkmanager
+      ansible.builtin.command: pacstrap /mnt base linux linux-firmware grub lvm2 networkmanager
 
     - name: Install basic tools
       # `sudo` is required in case of disable-root-login
@@ -259,25 +259,25 @@
         content: '{{ inventory_hostname }}'
         dest: /mnt/etc/hostname
 
-    - name: Setup timezone
-      ansible.builtin.command: arch-chroot /mnt ln -sf /usr/share/zoneinfo/{{ timezone }} /etc/localtime
-    - name: Set hardware clock to current system time
-      ansible.builtin.command: arch-chroot /mnt hwclock --systohc
+    # - name: Setup timezone
+    #   ansible.builtin.command: arch-chroot /mnt ln -sf /usr/share/zoneinfo/{{ timezone }} /etc/localtime
+    # - name: Set hardware clock to current system time
+    #   ansible.builtin.command: arch-chroot /mnt hwclock --systohc
 
-    - name: Locales - enable locales desired locales
-      ansible.builtin.lineinfile:
-        dest: /mnt/etc/locale.gen
-        regexp: '#{{ item }}\.UTF-8 UTF-8'
-        line: '{{ item }}.UTF-8 UTF-8'
-      loop: '{{ locales }}'
-    - name: Locales - generate files
-      ansible.builtin.command: arch-chroot /mnt locale-gen
-    - name: Locales - setup locale language
-      ansible.builtin.copy:
-        content: LANG={{ locales | first }}.UTF-8
-        dest: /mnt/etc/locale.conf
-    - name: Locales - setup console keymap
-      ansible.builtin.command: arch-chroot /mnt echo KEYMAP={{ console_keymap }} > /etc/vconsole.conf
+    # - name: Locales - enable locales desired locales
+    #   ansible.builtin.lineinfile:
+    #     dest: /mnt/etc/locale.gen
+    #     regexp: '#{{ item }}\.UTF-8 UTF-8'
+    #     line: '{{ item }}.UTF-8 UTF-8'
+    #   loop: '{{ locales }}'
+    # - name: Locales - generate files
+    #   ansible.builtin.command: arch-chroot /mnt locale-gen
+    # - name: Locales - setup locale language
+    #   ansible.builtin.copy:
+    #     content: LANG={{ locales | first }}.UTF-8
+    #     dest: /mnt/etc/locale.conf
+    # - name: Locales - setup console keymap
+    #   ansible.builtin.command: arch-chroot /mnt echo KEYMAP={{ console_keymap }} > /etc/vconsole.conf
 
     - name: Enable `NetworkManager` service
       # required to be able to connect to a wireless network later
@@ -386,9 +386,7 @@
         - { regex: ^HOOKS, line: HOOKS=(base udev autodetect modconf kms keyboard keymap consolefont block encrypt lvm2 filesystems fsck) }
 
     - name: initramfs - Generate the initial ramdisk image for `linux`
-      ansible.builtin.command: arch-chroot /mnt mkinitcpio -p linux
-    - name: initramfs - Generate the initial ramdisk image for `linux-lts`
-      ansible.builtin.command: arch-chroot /mnt mkinitcpio -p linux-lts
+      ansible.builtin.command: arch-chroot /mnt mkinitcpio -P
 
 
     # --- Bootloader ---
@@ -418,7 +416,7 @@
     - name: Bootloader (UEFI) - Install GRUB in the master boot record
       when: firmware == 'uefi'
       # pass a disk as an argument, not a partition
-      ansible.builtin.command: "arch-chroot /mnt grub-install --target=x86_64-efi --recheck {{ installation_block_device_name }}"
+      ansible.builtin.command: "arch-chroot /mnt grub-install --target=x86_64-efi"
 
     - name: Bootloader - Configure GRUB to unlock the encrypted partiton at boot time and to allow-discards (if supported)
       ansible.builtin.lineinfile:
