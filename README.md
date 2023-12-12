@@ -1,6 +1,6 @@
 # Ansible Arch Installation Script
 
-I like Archlinux a lot but I don't like to manually install it every time. To automate my setup I created 2 Ansible scripts:
+To automate my Archlinux setup I created 2 Ansible scripts:
 
 1. [ansible-arch-installation](https://github.com/mabq/ansible-arch-installation) (this repo) - fully automates a [basic Archlinux installation](https://wiki.archlinux.org/title/Installation_guide), leaving the host ready to run the second script.
 2. [ansible-post-installation](https://github.com/mabq/ansible-post-installation) installs and configures all the tools I need.
@@ -8,9 +8,7 @@ I like Archlinux a lot but I don't like to manually install it every time. To au
 
 ## Why two different scrips?
 
-[Ansible](https://archlinux.org/packages/extra/any/ansible/) is not included in the Archlinux [installation image](https://archlinux.org/download/), so this playbook (`local.yml`) must be executed from a [controller](https://docs.ansible.com/ansible/latest/getting_started/index.html#getting-started-with-ansible) machine. The second script can be executed locally with `ansible-pull`.
-
-The second script should work regardless of how you install Archlinux (via this script or via the `archinstall` script).
+[Ansible](https://archlinux.org/packages/extra/any/ansible/) is not included in the Archlinux [installation image](https://archlinux.org/download/), so this playbook must be executed from a [controller](https://docs.ansible.com/ansible/latest/getting_started/index.html#getting-started-with-ansible) machine. The second script can be executed locally with `ansible-pull`.
 
 
 ## Why not the `archinstall` script 
@@ -20,7 +18,7 @@ It fails with disk encryption enabled, but more importantly, with Ansible you ar
 
 ## About this script
 
-   - Executes only if the managed node was booted from the Arch installation image to avoid running this script against an undesired node.
+   - Executes only if the managed node was booted from the Arch installation image to avoid running this script againt any host by accident.
    - Configures the disk:
      - Securely erases the disk before installation (customizable, `false` by default).
      - Creates the required disk partitions depending on the motherboard's firmware type.

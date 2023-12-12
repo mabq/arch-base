@@ -1,11 +1,16 @@
-# --- Notes:
-#     The `username` variable must be passed via command-line arguments for security reasons, see README.
+# --- Notes --------------------------------------------------------------------
+
+#     The `username` variable must be passed as a command-line argument, see README.
 
 
-# --- Encrypted variables
-#     See README for instructions to encrypt values in Ansible
-#     Change them here to apply to all hosts or in the corresponging `host_vars/{HOSTNAME}.yml` file
-#     user password:
+# --- Encrypted variables ------------------------------------------------------
+#
+#     See README for instructions to encrypt values in Ansible.
+#
+#     Change them here to apply to all hosts or in the corresponging 
+#     `host_vars/{HOSTNAME}.yml` file.
+
+#     User password:
 password: !vault |
           $ANSIBLE_VAULT;1.1;AES256
           31323138626364626366653238356564386439303562376331313537323338386135653937663166
@@ -13,7 +18,11 @@ password: !vault |
           62323265303732663163396439646533313765643034356130383232616634643330623862633436
           6137353731656561330a386132316232366130623831626663393965666131383265626635333431
           6662
-#     disk encryption password (if `disable_root_login` is set to `false` this will also be used as the root password)
+
+#     Encryption password - will be used:
+#       - To encrypt the local disk.
+#       - As the root user's password (if root user is not disabled).
+#       - To encrypt/decrypt variables of the second script.
 encryption_password: !vault |
           $ANSIBLE_VAULT;1.1;AES256
           66363937626135333661653134623362326264333964316365373865353261323766313037326263
@@ -25,24 +34,47 @@ encryption_password: !vault |
           306230343666326337313231383033636534
 
 
-# --- Hosts-default variables
-#     Do not edit these variables here, overwrite them in the corresponding `host_vars/{HOSTNAME}.yml` file
-installation_block_device_name: /dev/sda  # will be different for nvme disks, use `lsblk -f` to identify the 
-system_size_in_gb: 32  # size for the system logical volume, user files will be stored on another logical volume (remainder space)
-swap_size_in_mb: 4096  # use 0 for no swap or a multiple of 1024
-disable_root_login: true  # when false the encryption password will be used as the root password
-securely_erase_disk: false  # if enabled, will take several hours to complete
-console_keymap: us  # https://wiki.archlinux.org/title/Linux_console/Keyboard_configuration
+# --- Hosts-default variables --------------------------------------------------
+
+#     Important! 
+#     Do not edit these variables here, overwrite them in the corresponding 
+#     `host_vars/{HOSTNAME}.yml` file.
+
+#     Will be different for nvme disks, use `lsblk -f` to identify the disk.
+installation_block_device_name: /dev/sda
+
+#     Size for the system logical volume, user files will be stored on another 
+#     logical volume (remainder space).
+system_size_in_gb: 32                       
+
+#     Use 0 for no swap or a multiple of 1024.
+swap_size_in_mb: 4096                       
+
+#     If set to `false` the encryption password will be used as the root password.
+disable_root_login: true                    
+
+#     If set to `true` writting random data to disk will take several hours.
+securely_erase_disk: false                  
+
+#     https://wiki.archlinux.org/title/Linux_console/Keyboard_configuration
+console_keymap: us                          
+
+#     Default timezone.
 timezone: 'America/Guayaquil'
-locales:  # the first one is the default one
+
+#     The first one will be the default.
+locales:                                    
   - en_US
   - es_EC
 
 
-# --- Anible configuration (do not change)
-#     Avoid checking the `~/.ssh/known_hosts` file because everytime I boot the managed node
-#     from the Live Environment it changes. Tried to use `host_key_checking = False` in the
-#     `ansible.cfg` file but it still gives me an error when there is already an entry for
-#     the given host.
+# --- Anible configurations ----------------------------------------------------
+
+#     Do not change!
+
+#     Avoid checking the `~/.ssh/known_hosts` file because everytime I boot the
+#     managed node from the Live Environment it changes. Tried to use
+#     `host_key_checking = False` in the `ansible.cfg` file but it still gives
+#     me an error when there is already an entry for the given host.
 ansible_ssh_common_args: -o "StrictHostKeyChecking no" -o "UserKnownHostsFile /dev/null"
 

@@ -14,10 +14,6 @@
     # --- Set variables ---
     #     Get system information required later in the process
 
-    - name: Notify section
-      ansible.builtin.debug:
-        msg: "============================== SET VARIABLES =============================="
-
     - name: Check `efivars` directory existance
       ansible.builtin.stat:
         path: /sys/firmware/efi/efivars
@@ -65,10 +61,6 @@
 
 
     # --- Disk configuration ---
-
-    - name: Notify section
-      ansible.builtin.debug:
-        msg: "============================== DISK CONFIGURATION =============================="
 
     - name: Wipe all disk partitions of the target disk
       ansible.builtin.command: find /dev -wholename "{{ installation_block_device_name }}*" -exec wipefs --force --all {} \;
@@ -316,11 +308,11 @@
         # the module fails when trying to set the following, have to do it manually below
         # group: "{{ username }}"
         # owner: "{{ username }}"
-        # mode: '0400'
+        # mode: '0600'
     - name: Set mode, owner, and group on the vault_key file
       ansible.builtin.command: arch-chroot /mnt {{ item }}
       loop:
-        - chmod 0400 /home/{{ username }}/.vault_key
+        - chmod 0600 /home/{{ username }}/.vault_key
         - chown {{ username }}:{{ username }} /home/{{ username }}/.vault_key
 
 
