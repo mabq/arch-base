@@ -57,15 +57,15 @@ disable_root_login: true
 securely_erase_disk: false                  
 
 #     https://wiki.archlinux.org/title/Linux_console/Keyboard_configuration
-console_keymap: us                          
+# console_keymap: us                          
 
 #     Default timezone.
-timezone: 'America/Guayaquil'
+# timezone: 'America/Guayaquil'
 
 #     The first one will be the default.
-locales:                                    
-  - en_US
-  - es_EC
+# locales:                                    
+#   - en_US
+#   - es_EC
 
 
 # --- Anible configurations ----------------------------------------------------

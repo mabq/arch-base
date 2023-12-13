@@ -18,7 +18,19 @@ The second playbook is meant to be executed all the time via `ansible-pull`.
 It fails with disk encryption enabled, but more importantly with Ansible you are not limited to the predefined set of options offered by the script, you can literally do whatever you want, like setting up LVM, adjust the swap size, etc.
 
 
-## About this script
+## About this playbook
+
+> To customize options see notes on `group_vars/all_hosts.yml`.
+
+- Only runs on systems booted from the Archlinux ISO.
+- Detects the firmware type and creates disk partitions accordingly. 
+    - Encrypts the main partition with LUKS.
+    - Creates an LVM volume group with two logical volumes, one for `/` and one for `/home`.
+    - Enables TRIM support if supported by the disk.
+- Installs only the basic packages for Archlinux to work, plus a few packages required to run the `arch-setup` playbook later on.
+- Does not configure the system, all configuration is done on the `arch-setup` playbook.
+- Creates the user account giving it sudo privileges.
+    - Stores the vault_key in the users home directory.
 
 Ansible yaml files are pretty self-explanatory (additionally I have added some comments) so just open the `local.yml` file and review everything the playbook does.
 
