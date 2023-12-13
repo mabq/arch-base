@@ -1,22 +1,30 @@
 # Ansible Arch Installation Script
 
-To automate my Archlinux setup I created 2 Ansible scripts:
+To automate my Archlinux setup I created 2 Ansible playbooks:
 
-1. [ansible-arch-installation](https://github.com/mabq/ansible-arch-installation) (this repo) - fully automates a [basic Archlinux installation](https://wiki.archlinux.org/title/Installation_guide), leaving the host ready to run the second script.
-2. [ansible-post-installation](https://github.com/mabq/ansible-post-installation) installs and configures all the tools I need.
+1. [arch-base](https://github.com/mabq/arch-base) (this repo) - fully automates a [basic Archlinux installation](https://wiki.archlinux.org/title/Installation_guide).
+2. [arch-setup](https://github.com/mabq/arch-setup) installs and configures all the tools I need.
 
 
 ## Why two different scrips?
 
-[Ansible](https://archlinux.org/packages/extra/any/ansible/) is not included in the Archlinux [installation image](https://archlinux.org/download/), so this playbook must be executed from a [controller](https://docs.ansible.com/ansible/latest/getting_started/index.html#getting-started-with-ansible) machine. The second script can be executed locally with `ansible-pull`.
+This playbook is meant to be used only once, when installing Arch --- since [ansible](https://archlinux.org/packages/extra/any/ansible/) is not included in the [Live Environment](https://wiki.archlinux.org/title/Installation_guide#Boot_the_live_environment) this playbook must be executed from a [controller](https://docs.ansible.com/ansible/latest/getting_started/index.html#getting-started-with-ansible) machine.
+
+The second playbook is meant to be executed all the time via `ansible-pull`.
 
 
-## Why not the `archinstall` script 
+## Why not use the `archinstall` script instead?
 
-It fails with disk encryption enabled, but more importantly, with Ansible you are not limited to the predefined set of options offered by the `archinstall` script, you can literally do whatever you want, like setting up LVM, adjust the swap size, etc.
+It fails with disk encryption enabled, but more importantly with Ansible you are not limited to the predefined set of options offered by the script, you can literally do whatever you want, like setting up LVM, adjust the swap size, etc.
 
 
 ## About this script
+
+Ansible yaml files are pretty self-explanatory (additionally I have added some comments) so just open the `local.yml` file and review everything the playbook does.
+
+You can change some options via variables, see notes in `group_vars/all_hosts.yml`.
+
+> Some tasks in this playbook use the `ansible.builtin.command` module instead of the specialized module for the given task, this is because the specialized module would affect the Live Environment, not the actual installation. For example, the `ansible.builtin.user` module would create the user in the Live Environment instead of the actual installation. 
 
    - Executes only if the managed node was booted from the Arch installation image to avoid running this script againt any host by accident.
    - Configures the disk:
@@ -42,8 +50,6 @@ It fails with disk encryption enabled, but more importantly, with Ansible you ar
      - Configures a SWAP file (customizable)
      - Generates the initial RAM file system. Automatically adds a key file so you won't need to type the disk encryption password during the boot process (all permissions are removed from the key file for security purposes).
      - Configures GRUB as the boot loader.
-
-> Some actions in this script use the `ansible.builtin.command` module instead of the specialized module for that type of action, this is because the specialized module would affect the Live Environment, not the actual installation. For example, the `ansible.builtin.user` module would create the user in the Live Environment instead of the actual installation. 
 
 
 ## Before running the script
@@ -72,7 +78,7 @@ It fails with disk encryption enabled, but more importantly, with Ansible you ar
    - Clone this repository:
    
      ```bash
-     git clone git@github.com:mabq/ansible-arch-installation.git
+     git clone git@github.com:mabq/arch-base.git
      ``` 
    
    - Review the `hosts` file --- make sure the name of the host you intend to affect is listed.

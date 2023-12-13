@@ -2,44 +2,56 @@
   tasks:
 
 
-    # --- Security check ---
-    #     Avoid applying this script by accident to any host
 
-    - name: Security --- exit if not booted from arch install media
+    # --- Security check -------------------------------------------------------
+
+    # Avoid applying this script by accident to any host
+
+    - name: Exit playbook if system was not booted from arch install media
       when: ansible_nodename != 'archiso'
       ansible.builtin.fail:
         msg: "This host is not running the Archlinux Live Environment"
 
 
-    # --- Set variables ---
-    #     Get system information required later in the process
 
-    - name: Check `efivars` directory existance
-      ansible.builtin.stat:
-        path: /sys/firmware/efi/efivars
-      register: efivars
-    - name: Get `firmware`
-      ansible.builtin.set_fact:
-        firmware: "{{ efivars.stat.exists | ternary('uefi', 'bios') }}"
-    - name: Print `firmware`
-      # https://wiki.archlinux.org/title/Arch_boot_process#Firmware_types
-      ansible.builtin.debug:
-        msg: "firmware = {{ firmware }}"
+    # --- Get system info ------------------------------------------------------
+
+    # Store some important information about the system into variables that 
+    # we will use later on.
+
+    - name: Get firmware type
+      # Disk partition will depend on firmware type.
+      # See https://wiki.archlinux.org/title/Arch_boot_process#Firmware_types
+      block:
+      - name: Check `efivars` directory existance
+        ansible.builtin.stat:
+          path: /sys/firmware/efi/efivars
+        register: efivars
+      - name: Get `firmware` type
+        ansible.builtin.set_fact:
+          firmware: "{{ efivars.stat.exists | ternary('uefi', 'bios') }}"
+      - name: Print info
+        ansible.builtin.debug:
+          msg: "firmware = {{ firmware }}"
 
     - name: Get `device_name_descriptor`
-      # get `sda` or `nvme0n1` from `/dev/sda` or `/dev/nvme0n1`
-      # see: https://wiki.archlinux.org/title/Device_file#Block_devices
+      # For some actions below we need just the `sda` or `nvme0n1` part from 
+      # `/dev/sda` or `/dev/nvme0n1`
+      # See https://wiki.archlinux.org/title/Device_file#Block_devices
       ansible.builtin.set_fact:
         device_name_descriptor: "{{ installation_block_device_name | split('/') | last }}"
-    - name: Print `device_name_descriptor`
+    - name: Print info
       ansible.builtin.debug:
         msg: "device_name_descriptor = {{ device_name_descriptor }}"
 
     - name: Get `disk_discard_support`
-      # I don't have a PC with an nvme drive to test this now. For nvme disks this should be false because nvme has built in support for TRIM. Check this again whenever you have the oportunity.
+      # If the disk has discard support we will enable ir later on.
+      # I don't have a PC with an nvme drive to test this now. For nvme disks 
+      # this should be false because nvme has built in support for TRIM. 
+      # Check this again whenever you have the oportunity.
       ansible.builtin.set_fact:
         disk_discard_support: "{{ ansible_devices[device_name_descriptor]['support_discard'] != '0' }}"
-    - name: Print `disk_discard_support`
+    - name: Print info
       ansible.builtin.debug:
         msg: "disk_discard_support = {{ disk_discard_support }}"
 
@@ -55,26 +67,27 @@
         efi_partition_number: "p{{ efi_partition_number }}"
         boot_partition_number: "p{{ boot_partition_number }}"
         main_partition_number: "p{{ main_partition_number }}"
-    - name: Print partition names
+    - name: Print info
       ansible.builtin.debug:
         msg: "efi_partition_number = {{ efi_partition_number }}, boot_partition_number = {{ boot_partition_number }}, main_partition_number = {{ main_partition_number }}"
 
 
-    # --- Disk configuration ---
+
+    # --- Disk configuration ---------------------------------------------------
 
     - name: Wipe all disk partitions of the target disk
       ansible.builtin.command: find /dev -wholename "{{ installation_block_device_name }}*" -exec wipefs --force --all {} \;
 
-    - name: Securely erase disk (if instructed)
+    - name: Securely erase disk (if enabled, not by default)
       when: securely_erase_disk
       block:
-      - name: Info
+      - name: Print info
         ansible.builtin.debug:
-          msg: "About to write random data to the entire disk, will take several hours to complete"
+          msg: "About to write random data to the entire disk, this will take several hours to complete"
       - name: Write random data to disk
         ansible.builtin.command: dd if=/dev/urandom of={{ installation_block_device_name }}
 
-    - name: UEFI - Disk partitions
+    - name: Create disk partition for UEFI systems
       when: firmware == 'uefi'
       block:
       - name: UEFI - Create EFI partition
@@ -82,6 +95,7 @@
           device: "{{ installation_block_device_name }}"
           label: gpt
           number: "{{ efi_partition_number }}"
+          #part_start: (disk start)
           part_end: 512MB
           name: EFI
           flags: [boot, esp]
@@ -103,7 +117,8 @@
           label: gpt
           number: "{{ main_partition_number }}"
           part_start: 1536MB
-          name: root
+          #part_end: (disk end)
+          name: main
           flags: [lvm]
           state: present
 
@@ -115,8 +130,9 @@
           device: "{{ installation_block_device_name }}"
           label: msdos
           number: "{{ boot_partition_number }}"
+          #part_start: (disk start)
           part_end: 1024MB
-          #name: boot
+          #name: (no support for name)
           fs_type: ext4
           flags: [boot]
           state: present
@@ -126,11 +142,12 @@
           label: msdos
           number: "{{ main_partition_number }}"
           part_start: 1024MB
-          #name: root
+          #part_end: (disk end)
+          #name: (no support for name)
           flags: [lvm]
           state: present
 
-    - name: Encrypt main partition
+    - name: Encrypt main partition (where system and user files will be stored)
       community.crypto.luks_device:
         device: "{{ installation_block_device_name }}{{ main_partition_number }}"
         type: luks2
@@ -139,27 +156,32 @@
         name: lvm
         passphrase: "{{ encryption_password }}"
 
-    - name: LVM - Create volume group (physical volume is automatically created)
-      community.general.lvg:
-        pvs: /dev/mapper/lvm
-        vg: main
-        pvresize: true
-        state: active
+    - name: LVM setup
+      # Logical Volume Manager (LVM) is a storage management solution that 
+      # provides a more flexible way to manage disk space compared to traditional 
+      # partitioning. 
+      block:
+      - name: LVM - Create volume group (physical volume is automatically created)
+        community.general.lvg:
+          pvs: /dev/mapper/lvm
+          vg: main
+          pvresize: true
+          state: active
+      - name: LVM - Create 'root' logical volume
+        community.general.lvol:
+          vg: main
+          lv: root
+          size: "{{ system_size_in_gb }}G"
+          active: true
+      - name: LVM - Create 'home' logical volume
+        community.general.lvol:
+          vg: main
+          lv: home
+          # use all remaining space for user files
+          size: +100%FREE
+          active: true
 
-    - name: LVM - Create 'root' logical volume
-      community.general.lvol:
-        vg: main
-        lv: root
-        size: "{{ system_size_in_gb }}G"
-        active: true
-    - name: LVM - Create 'home' logical volume
-      community.general.lvol:
-        vg: main
-        lv: home
-        size: +100%FREE
-        active: true
-
-    - name: UEFI - Format EFI partition
+    - name: Format EFI partition (UEFI only)
       when: firmware == 'uefi'
       community.general.filesystem:
         dev: "{{ installation_block_device_name }}{{ efi_partition_number }}"
@@ -169,11 +191,11 @@
       community.general.filesystem:
         dev: "{{ installation_block_device_name }}{{ boot_partition_number }}"
         fstype: ext4
-    - name: Format `root` logical volume
+    - name: Format `root` LVM logical volume
       community.general.filesystem:
         dev: /dev/main/root
         fstype: ext4
-    - name: Format `home` logical volume
+    - name: Format `home` LVM logical volume
       community.general.filesystem:
         dev: /dev/main/home
         fstype: ext4
@@ -207,11 +229,8 @@
         state: mounted
 
 
-    # --- Install packages ---
 
-    - name: Notify section
-      ansible.builtin.debug:
-        msg: "============================== INSTALL PACKAGES =============================="
+    # --- Install packages -----------------------------------------------------
 
     - name: Install base packages
       ansible.builtin.command: pacstrap /mnt base linux linux-firmware grub lvm2 networkmanager
@@ -226,11 +245,8 @@
       ansible.builtin.command: pacstrap /mnt efibootmgr
 
 
-    # --- System configuration ---
 
-    - name: Notify section
-      ansible.builtin.debug:
-        msg: "============================== SYSTEM CONFIGURATION =============================="
+    # --- System configuration -------------------------------------------------
 
     - name: fstab - create '/etc' directory
       ansible.builtin.file:
