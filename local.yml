@@ -2,7 +2,6 @@
   tasks:
 
 
-
     # --- Security check -------------------------------------------------------
 
     # Avoid applying this script by accident to any host
@@ -253,31 +252,37 @@
 
     # --- System configuration -------------------------------------------------
 
-    - name: fstab - create '/etc' directory
-      ansible.builtin.file:
-        path: /mnt/etc
-        state: directory
-    - name: fstab - generate file
-      ansible.builtin.shell:
-        cmd: genfstab -U -p /mnt >> /mnt/etc/fstab
-    - name: fstab - enable TRIM support (if supported)
-      when: disk_discard_support
-      ansible.builtin.replace:
-        path: /mnt/etc/fstab
-        regexp: '(relatime)\s+'
-        replace: '\1,discard\t'
+    - name: fstab
+      # The fstab file contains information about the partitions that should be 
+      # automatically mounted on system boot.
+      # All currently mounted partitions will be included - that is why we have 
+      # not mount the EFI partition yet.
+      block:
+      - name: fstab - create '/etc' directory
+        ansible.builtin.file:
+          path: /mnt/etc
+          state: directory
+      - name: fstab - generate file
+        ansible.builtin.shell:
+          cmd: genfstab -U -p /mnt >> /mnt/etc/fstab
+      - name: fstab - enable TRIM support (if supported)
+        when: disk_discard_support
+        ansible.builtin.replace:
+          path: /mnt/etc/fstab
+          regexp: '(relatime)\s+'
+          replace: '\1,discard\t'
 
     - name: Setup hostname
       ansible.builtin.copy:
         content: '{{ inventory_hostname }}'
         dest: /mnt/etc/hostname
 
-    # - name: Setup timezone
+    # - name: Setup timezone (to be done by the `arch-setup` playbook)
     #   ansible.builtin.command: arch-chroot /mnt ln -sf /usr/share/zoneinfo/{{ timezone }} /etc/localtime
     # - name: Set hardware clock to current system time
     #   ansible.builtin.command: arch-chroot /mnt hwclock --systohc
 
-    # - name: Locales - enable locales desired locales
+    # - name: Locales - enable desired locales (to be done by the `arch-setup` playbook)
     #   ansible.builtin.lineinfile:
     #     dest: /mnt/etc/locale.gen
     #     regexp: '#{{ item }}\.UTF-8 UTF-8'
@@ -293,11 +298,12 @@
     #   ansible.builtin.command: arch-chroot /mnt echo KEYMAP={{ console_keymap }} > /etc/vconsole.conf
 
     - name: Enable `NetworkManager` service
-      # required to be able to connect to a wireless network once the installation completes
+      # Required to be able to connect to a wireless network after installation
       ansible.builtin.command: arch-chroot /mnt systemctl enable NetworkManager
 
     - name: Enable `sshd` service
       ansible.builtin.command: arch-chroot /mnt systemctl enable sshd
+
 
 
     # --- User account ---
@@ -342,17 +348,24 @@
         - chmod 0600 /home/{{ username }}/.vault_key
 
 
+
     # --- Root account ---
 
     - name: Enable root login
       when: not disable_root_login
       block:
       - name: root account - generate password hash
-        # Archlinux changed the password hashing algorithm from `sha512` to `yescript` (https://archlinux.org/news/changes-to-default-password-hashing-algorithm-and-umask-settings/). Openssl does not support `yescript` yet, when it does update the `-6` flag to the one corresponding to `yescript`. Whenever you change the password within the system using the `passwd` command, the new password will be automatically hashed with the new algorithm.
+        # Archlinux changed the password hashing algorithm from `sha512` to
+        # `yescript` (see https://archlinux.org/news/changes-to-default-password-hashing-algorithm-and-umask-settings/).
+        # Openssl does not support `yescript` yet, when it does update the
+        # `-6` flag to the one corresponding to `yescript`. Whenever you
+        # change the password within the system using the `passwd` command,
+        # the new password will be automatically hashed with the new algorithm.
         ansible.builtin.command: openssl passwd -6 "{{ encryption_password }}"
         register: encryption_password_hash
       - name: root account - manually add the hashed password to `/etc/shadow`
-        # for the root user we must edit the shadow file manually, for some reason the `ansible.builtin.user` module won't work for root in the Live Environment
+        # Do it manually, the `user` module would affect the root user of the 
+        # live environment.
         ansible.builtin.replace:
           path: /mnt/etc/shadow
           regexp: (^root):([^:]*):(.*)
@@ -362,23 +375,23 @@
       when: disable_root_login
       # https://wiki.archlinux.org/title/Sudo#Disable_root_login
       # https://docs.ansible.com/ansible/latest/collections/ansible/builtin/user_module.html#parameter-password
-      # for the root user we must edit the shadow file manually, for some reason the `ansible.builtin.user` module won't work for root in the Live Environment
+      # Do it manually, the `user` module would affect the root user of the 
+      # live environment.
       ansible.builtin.replace:
         path: /mnt/etc/shadow
         regexp: (^root):([^:]*):(.*)
         replace: \1:!:\3
 
 
+
     # --- Initial ram filesystem ---
-    #     The initramfs is a temporary filesystem that is loaded into memory during
-    #     the boot process before the real root filesystem is mounted. We need to 
-    #     recreate the initramfs with support for LVM and disk encryption.
+    
+    #     The initramfs is a temporary filesystem that is loaded into memory
+    #     during the boot process before the real root filesystem is mounted.
+    #     We need to recreate the initramfs with support for LVM and disk
+    #     encryption.
 
-    - name: Notify section
-      ansible.builtin.debug:
-        msg: "============================== INITRAMFS =============================="
-
-    - name: initramfs - create a key file to avoid typing the encryption password twice during boot
+    - name: Create a key file to avoid typing the encryption password twice during boot
       block:
       - name: initramfs - create an empty file
         ansible.builtin.shell: arch-chroot /mnt dd bs=512 count=4 if=/dev/urandom of=/crypto_keyfile.bin
@@ -387,35 +400,33 @@
       - name: initramfs - remove all permissions for security reasons
         ansible.builtin.command: arch-chroot /mnt chmod 000 /crypto_keyfile.bin
 
-    - name: initramfs - change configuration options for the `mkinitcpio` script
+    - name: Change configuration options for the `mkinitcpio` script
       # mkinitcpio is a Bash script used to create an initial ramdisk environment
       ansible.builtin.lineinfile:
         dest: /mnt/etc/mkinitcpio.conf
         regexp: '{{ item.regex }}'
         line: '{{ item.line }}'
       loop:
-        # add the key file
+        # Add the key file
         - { regex: ^FILES, line: FILES=(/crypto_keyfile.bin) }
-        # add teh `encrypt` and `lvm2` hooks
+        # Add the `encrypt` and `lvm2` hooks
         - { regex: ^HOOKS, line: HOOKS=(base udev autodetect modconf kms keyboard keymap consolefont block encrypt lvm2 filesystems fsck) }
 
-    - name: initramfs - Generate the initial ramdisk image for `linux`
+    - name: Generate the initial ramdisk image for `linux`
       ansible.builtin.command: arch-chroot /mnt mkinitcpio -P
 
 
+
     # --- Bootloader ---
+
     #     https://wiki.archlinux.org/title/Arch_boot_process#Boot_loader
 
-    - name: Notify section
-      ansible.builtin.debug:
-        msg: "============================== BOOTLOADER =============================="
-
-    - name: Bootloader (UEFI) - Create '/boot/EFI' directory
+    - name: Create '/boot/EFI' directory (UEFI only)
       when: firmware == 'uefi'
       ansible.builtin.file:
         path: /mnt/boot/EFI
         state: directory
-    - name: Bootloader (UEFI) - Mount EFI partition
+    - name: Mount the EFI partition (UEFI only)
       when: firmware == 'uefi'
       ansible.posix.mount:
         src: "{{ installation_block_device_name }}{{ efi_partition_number }}"
@@ -423,35 +434,32 @@
         fstype: vfat
         state: mounted
 
-    - name: Bootloader (BIOS) - Install GRUB in the master boot record
+    - name: Install GRUB in the master boot record (BIOS only)
       when: firmware == 'bios'
       # pass a disk as an argument, not a partition
       ansible.builtin.command: "arch-chroot /mnt grub-install --target=i386-pc --recheck {{ installation_block_device_name }}"
-    - name: Bootloader (UEFI) - Install GRUB in the master boot record
+    - name: Install GRUB in the master boot record (UEFI only)
       when: firmware == 'uefi'
       # pass a disk as an argument, not a partition
       ansible.builtin.command: "arch-chroot /mnt grub-install --target=x86_64-efi"
 
-    - name: Bootloader - Configure GRUB to unlock the encrypted partiton at boot time and to allow-discards (if supported)
+    - name: Configure GRUB to unlock the encrypted partiton at boot time and to allow-discards (if supported)
       ansible.builtin.lineinfile:
         dest: /mnt/etc/default/grub
         regexp: '{{ item.regex }}'
         line: '{{ item.line }}'
       loop:
-        # enable encryption
+        # Enable encryption
         - { regex: ^#GRUB_ENABLE_CRYPTODISK, line: GRUB_ENABLE_CRYPTODISK=y }
-        # enable TRIM (if supported) and encryption
+        # Enable TRIM (if supported) and encryption
         - { regex: ^GRUB_CMDLINE_LINUX="", line: "GRUB_CMDLINE_LINUX=\"{{ disk_discard_support | ternary('cryptdevice={{ installation_block_device_name }}{{ main_partition_number }}:lvm:allow-discards', 'cryptdevice={{ installation_block_device_name }}{{ main_partition_number }}:lvm') }}\"" }
 
-    - name: Bootloader - Generate the GRUB configuration file
+    - name: Generate the GRUB configuration file
       ansible.builtin.command: "arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg"
 
 
-    # --- Enable SWAP ---
 
-    - name: Notify section
-      ansible.builtin.debug:
-        msg: "============================== ENABLE SWAP =============================="
+    # --- Enable SWAP ---
 
     - name: Enable SWAP
       when: swap_size_in_mb > 0
@@ -472,12 +480,9 @@
         ansible.builtin.command: arch-chroot /mnt swapon -a
 
 
-    # --- Reboot and exit playbook
 
-    - name: Notify section
-      ansible.builtin.debug:
-        msg: "============================== RESTARTING =============================="
-      
+    # --- Reboot and exit playbook ---
+
     - name: Shutdown
       community.general.shutdown:
 

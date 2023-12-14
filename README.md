@@ -8,9 +8,9 @@ To automate my Archlinux setup I created 2 Ansible playbooks:
 
 ## Why two different scrips?
 
-This playbook is meant to be used only once, when installing Arch --- since [ansible](https://archlinux.org/packages/extra/any/ansible/) is not included in the [Live Environment](https://wiki.archlinux.org/title/Installation_guide#Boot_the_live_environment) this playbook must be executed from a [controller](https://docs.ansible.com/ansible/latest/getting_started/index.html#getting-started-with-ansible) machine.
+This playbook is meant to be used only once, when installing Arch --- since [ansible](https://archlinux.org/packages/extra/any/ansible/) is not included in the [live environment](https://wiki.archlinux.org/title/Installation_guide#Boot_the_live_environment) this playbook must be executed from a [controller](https://docs.ansible.com/ansible/latest/getting_started/index.html#getting-started-with-ansible) machine.
 
-The second playbook is meant to be executed all the time via `ansible-pull`.
+The second playbook is meant to be executed all the time from the same machine via `ansible-pull`.
 
 
 ## Why not use the `archinstall` script instead?
@@ -22,69 +22,43 @@ It fails with disk encryption enabled, but more importantly with Ansible you are
 
 > To customize options see notes on `group_vars/all_hosts.yml`.
 
+> Some tasks in this playbook use the `ansible.builtin.command` module instead of the specialized module for the given task, this is because the specialized module would affect the Live Environment, not the actual installation. For example, the `ansible.builtin.user` module would create the user in the Live Environment instead of the actual installation. 
+
+This playbook does the following:
+
 - Only runs on systems booted from the Archlinux ISO.
 - Detects the firmware type and creates disk partitions accordingly. 
     - Encrypts the main partition with LUKS.
     - Creates an LVM volume group with two logical volumes, one for `/` and one for `/home`.
     - Enables TRIM support if supported by the disk.
-- Installs only the basic packages for Archlinux to work, plus a few packages required to run the `arch-setup` playbook later on.
-- Does not configure the system, all configuration is done on the `arch-setup` playbook.
+- Installs only basic packages plus a few required to run the `arch-setup` playbook later on.
+- Does not configure the system, configuration is done on the `arch-setup` playbook.
 - Creates the user account giving it sudo privileges.
-    - Stores the vault_key in the users home directory.
-
-Ansible yaml files are pretty self-explanatory (additionally I have added some comments) so just open the `local.yml` file and review everything the playbook does.
-
-You can change some options via variables, see notes in `group_vars/all_hosts.yml`.
-
-> Some tasks in this playbook use the `ansible.builtin.command` module instead of the specialized module for the given task, this is because the specialized module would affect the Live Environment, not the actual installation. For example, the `ansible.builtin.user` module would create the user in the Live Environment instead of the actual installation. 
-
-   - Executes only if the managed node was booted from the Arch installation image to avoid running this script againt any host by accident.
-   - Configures the disk:
-     - Securely erases the disk before installation (customizable, `false` by default).
-     - Creates the required disk partitions depending on the motherboard's firmware type.
-       - UEFI: 3 partitions (UEFI, boot, main)
-       - BIOS: 2 partitions (boot, main)
-     - Encrypts the main partition using [LUKS](https://wiki.archlinux.org/title/Dm-crypt/Encrypting_an_entire_system#LVM_on_LUKS).
-     - Creates a [LVM](https://wiki.archlinux.org/title/LVM) volume group called `main` in the `main` partiton.
-     - Creates 2 logical volumes in the `main` volume group:
-       - `root` where `/` will be mounted (32gb by default, customizable)
-       - `home` where `/home` will be mounted (remaining disk space).
-   - Installs basic packages (see the "Install packages" section).
-   - Performs basic configurations:
-     - Generates the `/etc/fstab` file (enables TRIM if supported)
-     - Sets the console keymap (customizable)
-     - Sets the hostname (customizable)
-     - Sets the time-zome (customizable)
-     - Generates the locales (customizable)
-     - Enables `sshd` and `NetworkManager` services
-     - Creates the user account (with sudo access. Create a `.vault_key` file in the user's home directory with the encryption key)
-     - Disables root login (customizable, when set to false the encryption password will be used as root password)
-     - Configures a SWAP file (customizable)
-     - Generates the initial RAM file system. Automatically adds a key file so you won't need to type the disk encryption password during the boot process (all permissions are removed from the key file for security purposes).
-     - Configures GRUB as the boot loader.
+    - Stores the encryption key in a file called `.vault_key` in the user's home directory.
+- Enables or disables the root account, as instructed.
+- Enables SWAP, as instructed.
 
 
 ## Before running the script
 
 1. On the **managed node** (where you want to install Archlinux):
 
-   - Boot the live environment.
+   - Boot from the [installation image](https://archlinux.org/download/).
    
    - Change the password of the root user:
    
      ```bash
-     # use a simple password, its only temporary
+     # Use a simple password, its only temporary.
      passwd
      ```
    
-   - Check the IP address:
+   - Annotate the IP address:
    
      ```bash
+     # Use `iwctl` if you need to connect to a wireless network.
      ip a
      ```
    
-     Use `iwctl` if you need to connect to a wireless network.
-
 2. On the **controller node**:
 
    - Clone this repository:
@@ -93,17 +67,18 @@ You can change some options via variables, see notes in `group_vars/all_hosts.ym
      git clone git@github.com:mabq/arch-base.git
      ``` 
    
-   - Review the `hosts` file --- make sure the name of the host you intend to affect is listed.
+   - Review the `hosts.ini` file --- make sure the hostname you intend to assign to the managed node is listed there.
    
-   - Review the `host_vars/{HOSTNAME}.yml` file --- make sure the variable `ansible_host` is pointing to the correct IP address.
+   - Make sure there is a file matching that hostname in `host_vars/{HOSTNAME}.yml` --- the variable `ansible_host` must be pointing to the correct IP address (the one you just checked a couple of steps above).
 
-   - Check the variables defined in the `group_vars/all.yml` file, specially:
+   - Read the `group_vars/all.yml` file, you may need to overwrite one or more of the default variables, pay special attention to the following variables: 
 
-     - `target_disk` --- use `fdisk -l` on the managed node to identify the [block device name](https://wiki.archlinux.org/title/Device_file#Block_devices)
+     - `target_disk` --- use `fdisk -l` on the managed node to identify the [block device name](https://wiki.archlinux.org/title/Device_file#Block_devices).
 
-     - `password` --- is the password for the user account (the username must be passed as a command-line argument), see below how to encrypt a variable value
+     - `password` --- is the password for the user account (see below how to encrypt a variable value).
 
-     - `encryption_password` --- is the password used to encrypt the disk, make sure it is long and random (this password will also be used to automatically decrypt the contents of the second script)
+     - `encryption_password` --- is the password used to encrypt the disk, make sure it is long and random.
+
 
 ### Encrypt a variable value with Ansible
 
@@ -119,22 +94,18 @@ Encrypt the variable value:
    ansible-vault encrypt_string '{TEXT_TO_ENCRYPT}' --vault-password-file ~/.vault_key --name '{VARIABLE_NAME}'`
    ```
 
-Copy the output and replace the corresponding variable in `/group_vars/all.yml` or in the corresponding `host_vars/{HOSTNAME}.yml`.
+Copy the encrypted output and paste it in `/group_vars/all.yml` or in the corresponding `host_vars/{HOSTNAME}.yml`.
 
 
 ## Run the script
 
 Change directory into the cloned repository and run:
 
-> the `username` variable is passed as a command-line argument for security reasons
-
    ```bash
    ansible-playbook --extra-vars "username={USERNAME}" local.yml -k --vault-password-file ~/.vault_key
    ```
 
-You will be prompted for the root password of the managed node (the one you just changed).
-
-If no errors occur the managed node will shutdown automatically after a successful installation.
+You will be prompted for the root password of the managed node (the one you changed recently). If no errors occur the managed node will shutdown automatically after a successful installation.
 
 Remove install media and turn it back on.
 

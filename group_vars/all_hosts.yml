@@ -1,6 +1,7 @@
 # --- Notes --------------------------------------------------------------------
 
-#     The `username` variable must be passed as a command-line argument, see README.
+#     The `username` variable must be passed as a command-line argument,
+#     see README.
 
 
 # --- Encrypted variables ------------------------------------------------------
