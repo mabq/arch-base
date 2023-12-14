@@ -214,13 +214,8 @@
         path: /mnt/boot
         state: directory
 
-    - name: Mount the boot partition to `/mnt/boot`
-      ansible.posix.mount:
-        src: "{{ installation_block_device_name }}{{ boot_partition_number }}"
-        path: /mnt/boot
-        fstype: ext4
-        state: mounted
     - name: Mount the `root` logical volume to `/mnt`
+      # must go first
       ansible.posix.mount:
         src: /dev/lvm/root
         path: /mnt
@@ -230,6 +225,12 @@
       ansible.posix.mount:
         src: /dev/lvm/home
         path: /mnt/home
+        fstype: ext4
+        state: mounted
+    - name: Mount the boot partition to `/mnt/boot`
+      ansible.posix.mount:
+        src: "{{ installation_block_device_name }}{{ boot_partition_number }}"
+        path: /mnt/boot
         fstype: ext4
         state: mounted
 

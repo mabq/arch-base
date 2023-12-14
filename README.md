@@ -1,9 +1,9 @@
-# Ansible Arch Installation Script
+# Archlinux base installation with Ansible
 
-To automate my Archlinux setup I created 2 Ansible playbooks:
+To automate my Archlinux setup I created 2 ansible playbooks:
 
-1. [arch-base](https://github.com/mabq/arch-base) (this repo) - fully automates a [basic Archlinux installation](https://wiki.archlinux.org/title/Installation_guide).
-2. [arch-setup](https://github.com/mabq/arch-setup) installs and configures all the tools I need.
+1. [arch-base](https://github.com/mabq/arch-base) (this repo) - fully automates a [basic Archlinux installation](https://wiki.archlinux.org/title/Installation_guide)
+2. [arch-setup](https://github.com/mabq/arch-setup) installs and configures all the tools I need
 
 
 ## Why two different scrips?
@@ -69,7 +69,7 @@ This playbook does the following:
    
    - Review the `hosts.ini` file --- make sure the hostname you intend to assign to the managed node is listed there.
    
-   - Make sure there is a file matching that hostname in `host_vars/{HOSTNAME}.yml` --- the variable `ansible_host` must be pointing to the correct IP address (the one you just checked a couple of steps above).
+   - Make sure there is a file matching that hostname in `host_vars/{HOSTNAME}.yml` --- the variable `ansible_host` must be pointing to the correct IP address (the one you just checked).
 
    - Read the `group_vars/all.yml` file, you may need to overwrite one or more of the default variables, pay special attention to the following variables: 
 
@@ -94,9 +94,9 @@ This playbook does the following:
      Use the `nmtui` command to connect to a wireless network.
 
 
-## Encrypt a variable value with Ansible
+## How to encrypt a variable value with Ansible
 
-To encrypt a variable with Ansible, first store the encryption password in a file to avoid any typos:
+First store the encryption password in a file to avoid any typos:
 
    ```bash
    echo "{encryption-password-here}" > ~/.vault_key; chmod 600 ~/.vault_key
