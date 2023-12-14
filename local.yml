@@ -33,10 +33,6 @@
         ansible.builtin.debug:
           msg: "firmware = {{ firmware }}"
 
-    - name: Print info
-      ansible.builtin.debug:
-        msg: "installation_block_device_name = {{ installation_block_device_name }}"
-
     - name: Get `device_name_descriptor`
       # For some actions below we need just the `sda` or `nvme0n1` part from 
       # `/dev/sda` or `/dev/nvme0n1`

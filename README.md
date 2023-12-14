@@ -20,7 +20,7 @@ It fails with disk encryption enabled, but more importantly with Ansible you are
 
 ## About this playbook
 
-> To customize options see notes on `group_vars/all_hosts.yml`.
+> To customize options see notes on `group_vars/all.yml`.
 
 > Some tasks in this playbook use the `ansible.builtin.command` module instead of the specialized module for the given task, this is because the specialized module would affect the Live Environment, not the actual installation. For example, the `ansible.builtin.user` module would create the user in the Live Environment instead of the actual installation. 
 
