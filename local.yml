@@ -90,6 +90,7 @@
       when: firmware == 'uefi'
       block:
       - name: UEFI - Create EFI partition
+        # To boot from a disk using UEFI, an EFI system partition is required.
         community.general.parted:
           device: "{{ installation_block_device_name }}"
           label: gpt
@@ -245,6 +246,7 @@
       ansible.builtin.command: pacstrap /mnt sudo neovim openssh ansible git
 
     - name: Install `efibootmgr` (UEFI only)
+      # used by the GRUB installation script to write boot entries to NVRAM
       when: firmware == 'uefi'
       ansible.builtin.command: pacstrap /mnt efibootmgr
 
@@ -434,16 +436,17 @@
         fstype: vfat
         state: mounted
 
-    - name: Install GRUB in the master boot record (BIOS only)
+    - name: Install GRUB (BIOS)
       when: firmware == 'bios'
       # pass a disk as an argument, not a partition
-      ansible.builtin.command: "arch-chroot /mnt grub-install --target=i386-pc --recheck {{ installation_block_device_name }}"
-    - name: Install GRUB in the master boot record (UEFI only)
+      ansible.builtin.command: "arch-chroot /mnt grub-install --target=i386-pc {{ installation_block_device_name }}"
+    - name: Install GRUB (UEFI)
       when: firmware == 'uefi'
-      # pass a disk as an argument, not a partition
-      ansible.builtin.command: "arch-chroot /mnt grub-install --target=x86_64-efi"
+      # https://wiki.archlinux.org/title/GRUB#Installation
+      ansible.builtin.command: "arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot/EFI --bootloader-id=GRUB"
 
     - name: Configure GRUB to unlock the encrypted partiton at boot time and to allow-discards (if supported)
+      # https://wiki.archlinux.org/title/GRUB#Configuration
       ansible.builtin.lineinfile:
         dest: /mnt/etc/default/grub
         regexp: '{{ item.regex }}'
