@@ -80,7 +80,7 @@
     - name: Securely erase disk (if enabled, not by default)
       when: securely_erase_disk
       block:
-      - name: Print info
+      - name: Warn about overwritting disk content time
         ansible.builtin.debug:
           msg: "About to write random data to the entire disk, this will take several hours to complete"
       - name: Write random data to disk
@@ -321,7 +321,7 @@
       ansible.builtin.command: openssl passwd -6 "{{ password }}"
       register: password_hash
 
-    - name: Create the user account
+    - name: Create user account
       # Use the `command` module, the `user` module would create the user on 
       # the live environment, not in the targeted installation.
       # For supplementary groups info see https://wiki.archlinux.org/title/Users_and_groups#Group_list
