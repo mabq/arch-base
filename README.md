@@ -79,8 +79,22 @@ This playbook does the following:
 
      - `encryption_password` --- is the password used to encrypt the disk, make sure it is long and random.
 
+   - Run the script:
 
-### Encrypt a variable value with Ansible
+     Change directory into the cloned repository and run:
+
+     ```bash
+     ansible-playbook --extra-vars "username={USERNAME}" local.yml -k --vault-password-file ~/.vault_key
+     ```
+
+     You will be prompted for the root password of the managed node (the one you changed recently). If no errors occur the managed node will shutdown automatically after a successful installation.
+
+     Remove install media and turn it back on.
+
+     Use the `nmtui` command to connect to a wireless network.
+
+
+## Encrypt a variable value with Ansible
 
 To encrypt a variable with Ansible, first store the encryption password in a file to avoid any typos:
 
@@ -96,18 +110,4 @@ Encrypt the variable value:
 
 Copy the encrypted output and paste it in `/group_vars/all.yml` or in the corresponding `host_vars/{HOSTNAME}.yml`.
 
-
-## Run the script
-
-Change directory into the cloned repository and run:
-
-   ```bash
-   ansible-playbook --extra-vars "username={USERNAME}" local.yml -k --vault-password-file ~/.vault_key
-   ```
-
-You will be prompted for the root password of the managed node (the one you changed recently). If no errors occur the managed node will shutdown automatically after a successful installation.
-
-Remove install media and turn it back on.
-
-Use the `nmtui` command to connect to a wireless network.
 
