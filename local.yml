@@ -166,18 +166,18 @@
       - name: LVM - Create volume group (physical volume is automatically created)
         community.general.lvg:
           pvs: /dev/mapper/lvm
-          vg: lvm
+          vg: vg
           pvresize: true
           state: active
       - name: LVM - Create 'root' logical volume
         community.general.lvol:
-          vg: lvm
+          vg: vg
           lv: root
           size: "{{ system_size_in_gb }}G"
           active: true
       - name: LVM - Create 'home' logical volume
         community.general.lvol:
-          vg: lvm
+          vg: vg
           lv: home
           # use all remaining space for user files
           size: +100%FREE
@@ -195,11 +195,11 @@
         fstype: ext4
     - name: Format `root` LVM logical volume
       community.general.filesystem:
-        dev: /dev/lvm/root
+        dev: /dev/vg/root
         fstype: ext4
     - name: Format `home` LVM logical volume
       community.general.filesystem:
-        dev: /dev/lvm/home
+        dev: /dev/vg/home
         fstype: ext4
 
     # `/mnt` is the linux directory where you are suppoused to mount external 
@@ -217,13 +217,13 @@
     - name: Mount the `root` logical volume to `/mnt`
       # must go first
       ansible.posix.mount:
-        src: /dev/lvm/root
+        src: /dev/vg/root
         path: /mnt
         fstype: ext4
         state: mounted
     - name: Mount the `home` logical volumen to `/mnt/home`
       ansible.posix.mount:
-        src: /dev/lvm/home
+        src: /dev/vg/home
         path: /mnt/home
         fstype: ext4
         state: mounted
@@ -456,7 +456,7 @@
         # Enable encryption
         - { regex: ^#GRUB_ENABLE_CRYPTODISK, line: GRUB_ENABLE_CRYPTODISK=y }
         # Enable TRIM (if supported) and encryption
-        - { regex: ^GRUB_CMDLINE_LINUX="", line: "GRUB_CMDLINE_LINUX=\"{{ disk_discard_support | ternary('cryptdevice={{ installation_block_device_name }}{{ main_partition_number }}:lvm:allow-discards', 'cryptdevice={{ installation_block_device_name }}{{ main_partition_number }}:lvm') }}\"" }
+        - { regex: ^GRUB_CMDLINE_LINUX="", line: "GRUB_CMDLINE_LINUX=\"{{ disk_discard_support | ternary('cryptdevice={{ installation_block_device_name }}{{ main_partition_number }}:vg:allow-discards', 'cryptdevice={{ installation_block_device_name }}{{ main_partition_number }}:vg') }}\"" }
 
     - name: Generate the GRUB configuration file
       ansible.builtin.command: "arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg"
