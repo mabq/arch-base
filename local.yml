@@ -118,7 +118,7 @@
           number: "{{ main_partition_number }}"
           part_start: 1536MB
           #part_end: (disk end)
-          name: main
+          name: master
           flags: [lvm]
           state: present
 
