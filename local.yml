@@ -164,9 +164,12 @@
       # provides a more flexible way to manage disk space compared to 
       # traditional partitioning. 
       community.general.lvg:
-        pvs: "/dev/mapper/{{ luks_device_name }}"
-        vg: "{{ lvm_vg_name }}"
+        force: true
+        reset_pv_uuid: true
+        pvs: [ "/dev/mapper/{{ luks_device_name }}" ]
+        reset_vg_uuid: true
         pvresize: true
+        vg: "{{ lvm_vg_name }}"
         state: active
     - name: LVM - Create 'root' logical volume
       community.general.lvol:
