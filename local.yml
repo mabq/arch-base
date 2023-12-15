@@ -18,20 +18,18 @@
     # Store some important information about the system into variables that 
     # we will use later on.
 
-    - name: Get firmware type
+    - name: Check `efivars` directory existance
+      ansible.builtin.stat:
+        path: /sys/firmware/efi/efivars
+      register: efivars
+    - name: Get `firmware` type
       # Disk partition will depend on firmware type.
       # See https://wiki.archlinux.org/title/Arch_boot_process#Firmware_types
-      block:
-      - name: Check `efivars` directory existance
-        ansible.builtin.stat:
-          path: /sys/firmware/efi/efivars
-        register: efivars
-      - name: Get `firmware` type
-        ansible.builtin.set_fact:
-          firmware: "{{ efivars.stat.exists | ternary('uefi', 'bios') }}"
-      - name: Print info
-        ansible.builtin.debug:
-          msg: "firmware = {{ firmware }}"
+      ansible.builtin.set_fact:
+        firmware: "{{ efivars.stat.exists | ternary('uefi', 'bios') }}"
+    - name: Print info
+      ansible.builtin.debug:
+        msg: "firmware = {{ firmware }}"
 
     - name: Get `device_name_descriptor`
       # For some actions below we need just the `sda` or `nvme0n1` part from 
@@ -74,34 +72,38 @@
 
     # --- Disk configuration ---------------------------------------------------
 
-    - name: Wipe all disk partitions of the target disk
-      ansible.builtin.command: find /dev -wholename "{{ installation_block_device_name }}*" -exec wipefs --force --all {} \;
+    - name: Disk - Erase any existing filesystem and partition table signatures
+      ansible.builtin.command: wipefs --all --force "{{ installation_block_device_name }}"
+      # ansible.builtin.command: find /dev -wholename "{{ installation_block_device_name }}*" -exec wipefs --force --all {} \;
 
-    - name: Securely erase disk (if enabled, not by default)
-      when: securely_erase_disk
-      block:
-      - name: Warn about overwritting disk content time
-        ansible.builtin.debug:
-          msg: "About to write random data to the entire disk, this will take several hours to complete"
-      - name: Write random data to disk
-        ansible.builtin.command: dd if=/dev/urandom of={{ installation_block_device_name }}
+    # (Don't do this with Ansible, it takes too much time without any feedback,
+    # it can be confusing. If you want to securely erase the disk do it 
+    # manually before running the playbook)
+    # - name: Disk - Securely erase disk (if enabled, not by default)
+    #   when: securely_erase_disk
+    #   block:
+    #   - name: Disk - Warn about overwritting disk content time
+    #     ansible.builtin.debug:
+    #       msg: "About to write random data to the entire disk, this will take several hours to complete"
+    #   - name: Disk - Write random data to disk
+    #     ansible.builtin.command: dd if=/dev/zero of={{ installation_block_device_name }} bs=4M status=progress
 
-    - name: Create disk partition for UEFI systems
+    - name: Create disk partitions for UEFI systems
       when: firmware == 'uefi'
       block:
-      - name: UEFI - Create EFI partition
+      - name: Disk - Create EFI partition (UEFI)
         # To boot from a disk using UEFI, an EFI system partition is required.
         community.general.parted:
           device: "{{ installation_block_device_name }}"
           label: gpt
           number: "{{ efi_partition_number }}"
-          #part_start: (disk start)
           part_end: 512MB
           name: EFI
-          flags: [boot, esp]
+          flags: [esp]
+          # flags: [boot, esp] # https://wiki.archlinux.org/title/EFI_system_partition#GPT_partitioned_disks
           fs_type: fat32
           state: present
-      - name: UEFI - Create boot partition
+      - name: Disk - Create boot partition (UEFI)
         community.general.parted:
           device: "{{ installation_block_device_name }}"
           label: gpt
@@ -109,125 +111,124 @@
           part_start: 512MB
           part_end: 1536MB
           name: boot
+          # flags: (none)
           fs_type: ext4
           state: present
-      - name: UEFI - Create main partition
+      - name: Disk - Create main partition (UEFI)
         community.general.parted:
           device: '{{ installation_block_device_name }}'
           label: gpt
           number: "{{ main_partition_number }}"
           part_start: 1536MB
-          #part_end: (disk end)
           name: main
           flags: [lvm]
+          # fs_type: (format is applied to the logical volumes, not the partition)
           state: present
 
-    - name: BIOS - Disk partitions
+    - name: Create disk partitions for BIOS systems
       when: firmware == 'bios'
       block:
-      - name: BIOS - Create boot partition
+      - name: Disk - Create boot partition (BIOS)
         community.general.parted:
           device: "{{ installation_block_device_name }}"
           label: msdos
           number: "{{ boot_partition_number }}"
-          #part_start: (disk start)
           part_end: 1024MB
-          #name: (no support for name)
           fs_type: ext4
           flags: [boot]
           state: present
-      - name: BIOS - Create main partition
+      - name: Disk - Create main partition (BIOS)
         community.general.parted:
           device: "{{ installation_block_device_name }}"
           label: msdos
           number: "{{ main_partition_number }}"
           part_start: 1024MB
-          #part_end: (disk end)
-          #name: (no support for name)
+          # fs_type: (format is applied to the logical volumes, not the partition)
           flags: [lvm]
           state: present
 
-    - name: Encrypt main partition (where system and user files will be stored)
-      # Data encryption at rest - the disk won't be readable unless you enter
-      # the encryption password.
+    - name: Disk - Encrypt main partition
+      # This is called encryption at rest, it provides security in case the 
+      # device is stolen and someone has physical access to the disk. Once 
+      # the system is booted, it does not provice any security.
       community.crypto.luks_device:
         device: "{{ installation_block_device_name }}{{ main_partition_number }}"
         type: luks2
         new_passphrase: "{{ encryption_password }}"
         state: opened
-        name: crypt
+        name: "{{ luks_device_name }}" 
         passphrase: "{{ encryption_password }}"
 
-    - name: LVM setup
+    - name: LVM - Create volume group (physical volume is automatically created)
       # Logical Volume Manager (LVM) is a storage management solution that 
       # provides a more flexible way to manage disk space compared to 
       # traditional partitioning. 
-      block:
-      - name: LVM - Create volume group (physical volume is automatically created)
-        community.general.lvg:
-          pvs: /dev/mapper/crypt
-          vg: lvm
-          pvresize: true
-          state: active
-      - name: LVM - Create 'root' logical volume
-        community.general.lvol:
-          vg: lvm
-          lv: root
-          size: "{{ system_size_in_gb }}G"
-          active: true
-      - name: LVM - Create 'home' logical volume
-        community.general.lvol:
-          vg: lvm
-          lv: home
-          # use all remaining space for user files
-          size: +100%FREE
-          active: true
+      community.general.lvg:
+        pvs: "/dev/mapper/{{ luks_device_name }}"
+        vg: "{{ lvm_vg_name }}"
+        pvresize: true
+        state: active
+    - name: LVM - Create 'root' logical volume
+      community.general.lvol:
+        vg: "{{ lvm_vg_name }}" 
+        lv: root
+        size: "{{ space_for_system_files_in_gb }}G"
+        active: true
+    - name: LVM - Create 'home' logical volume
+      community.general.lvol:
+        vg: "{{ lvm_vg_name }}" 
+        lv: home
+        # use all remaining space for user files
+        size: +100%FREE
+        active: true
 
-    - name: Format EFI partition (UEFI only)
+    - name: Disk - Format EFI partition (UEFI only)
       when: firmware == 'uefi'
       community.general.filesystem:
         dev: "{{ installation_block_device_name }}{{ efi_partition_number }}"
         fstype: vfat
         opts: '-F32'
-    - name: Format boot partition
+    - name: Disk - Format boot partition
       community.general.filesystem:
         dev: "{{ installation_block_device_name }}{{ boot_partition_number }}"
         fstype: ext4
-    - name: Format `root` LVM logical volume
+    - name: Disk - Format `root` LVM logical volume
       community.general.filesystem:
-        dev: /dev/lvm/root
+        dev: "/dev/{{ lvm_vg_name }}/root"
         fstype: ext4
-    - name: Format `home` LVM logical volume
+    - name: Disk - Format `home` LVM logical volume
       community.general.filesystem:
-        dev: /dev/lvm/home
+        dev: "/dev/{{ lvm_vg_name }}/home" 
         fstype: ext4
 
-    # `/mnt` is the linux directory where you are suppoused to mount external 
-    # disks. The live environment is running completely from memory, then we 
-    # will mount our logical volumes to those directories.
-    - name: Create directory for '/home'
+    # This directories are created in the filesystem of the live environment, 
+    # which is running completely from memory.
+    - name: Disk - Create directory for '/home'
       ansible.builtin.file:
         path: /mnt/home
         state: directory
-    - name: Create directory for '/boot'
+    - name: Disk - Create directory for '/boot'
       ansible.builtin.file:
         path: /mnt/boot
         state: directory
 
-    - name: Mount the `root` logical volume to `/mnt`
-      # must go first
+    # Here we mount the physical devices to the corresponding directories of 
+    # the live environment file system.
+    - name: Disk - Mount the `root` logical volume to `/mnt`
+      # should `/mnt` be mounted first than the other 2?, just in case I put
+      # it first
       ansible.posix.mount:
-        src: /dev/lvm/root
+        src: "/dev/{{ lvm_vg_name }}/root"
         path: /mnt
         fstype: ext4
         state: mounted
-    - name: Mount the `home` logical volumen to `/mnt/home`
+    - name: Disk - Mount the `home` logical volumen to `/mnt/home`
       ansible.posix.mount:
-        src: /dev/lvm/home
+        src: "/dev/{{ lvm_vg_name }}/home"  
         path: /mnt/home
         fstype: ext4
         state: mounted
-    - name: Mount the boot partition to `/mnt/boot`
+    - name: Disk - Mount the boot partition to `/mnt/boot`
       ansible.posix.mount:
         src: "{{ installation_block_device_name }}{{ boot_partition_number }}"
         path: /mnt/boot
@@ -261,21 +262,21 @@
       # All currently mounted partitions will be included - that is why we have 
       # not mount the EFI partition yet.
       block:
-      - name: fstab - create '/etc' directory
+      - name: Config fstab - create '/etc' directory
         ansible.builtin.file:
           path: /mnt/etc
           state: directory
-      - name: fstab - generate file
+      - name: Config fstab - generate file
         ansible.builtin.shell:
           cmd: genfstab -U -p /mnt >> /mnt/etc/fstab
-      - name: fstab - enable TRIM support (if supported)
+      - name: Config fstab - enable TRIM support (if supported)
         when: disk_discard_support
         ansible.builtin.replace:
           path: /mnt/etc/fstab
           regexp: '(relatime)\s+'
           replace: '\1,discard\t'
 
-    - name: Setup hostname
+    - name: Config - hostname
       ansible.builtin.copy:
         content: '{{ inventory_hostname }}'
         dest: /mnt/etc/hostname
@@ -300,18 +301,18 @@
     # - name: Locales - setup console keymap
     #   ansible.builtin.command: arch-chroot /mnt echo KEYMAP={{ console_keymap }} > /etc/vconsole.conf
 
-    - name: Enable `NetworkManager` service
+    - name: Config - Enable `NetworkManager` service
       # Required to be able to connect to a wireless network after installation
       ansible.builtin.command: arch-chroot /mnt systemctl enable NetworkManager
 
-    - name: Enable `sshd` service
+    - name: Config - Enable `sshd` service
       ansible.builtin.command: arch-chroot /mnt systemctl enable sshd
 
 
 
     # --- User account ---
 
-    - name: Hash the password for the user account
+    - name: User - Hash the password
       # Archlinux changed the password hashing algorithm from `sha512` to 
       # `yescript` (see https://archlinux.org/news/changes-to-default-password-hashing-algorithm-and-umask-settings/).
       # Openssl does not support `yescript` yet, when it does update the `-6` 
@@ -321,20 +322,21 @@
       ansible.builtin.command: openssl passwd -6 "{{ password }}"
       register: password_hash
 
-    - name: Create user account
+    - name: User - Create the account
       # Use the `command` module, the `user` module would create the user on 
       # the live environment, not in the targeted installation.
       # For supplementary groups info see https://wiki.archlinux.org/title/Users_and_groups#Group_list
-      ansible.builtin.command: "arch-chroot /mnt useradd {{ username }} --create-home --user-group --groups adm,wheel --password {{ password_hash.stdout }}"
-      ignore_errors: true
+      ansible.builtin.command: "arch-chroot /mnt useradd --create-home --user-group --groups adm,wheel --password {{ password_hash.stdout }} {{ username }}"
+      # ignore_errors: true
 
-    - name: Give the user account passwordless sudo access
+    - name: User - Give passwordless sudo access
+      # You should not be using the root user for anything really
       # https://wiki.archlinux.org/title/Sudo#Configure_sudo_using_drop-in_files_in_/etc/sudoers.d
       ansible.builtin.copy:
         content: "{{ username }} ALL=(ALL:ALL) NOPASSWD: ALL"
         dest: /mnt/etc/sudoers.d/{{ username }}
 
-    - name: Create vault_key file in the user's home directory
+    - name: User - Create vault_key file
       # This will allow us to run the second script without manually creating 
       # this file, we already have the encryption password available here.
       ansible.builtin.copy:
@@ -345,7 +347,7 @@
         # group: "{{ username }}"
         # owner: "{{ username }}"
         # mode: '0600'
-    - name: Set group, owner and mode on the vault_key file
+    - name: User - Make sure only the user can read and write to the vault_key file
       ansible.builtin.command: arch-chroot /mnt {{ item }}
       loop:
         - chown {{ username }}:{{ username }} /home/{{ username }}/.vault_key
@@ -358,7 +360,7 @@
     - name: Enable root login
       when: not disable_root_login
       block:
-      - name: root account - generate password hash
+      - name: Root - generate password hash
         # Archlinux changed the password hashing algorithm from `sha512` to
         # `yescript` (see https://archlinux.org/news/changes-to-default-password-hashing-algorithm-and-umask-settings/).
         # Openssl does not support `yescript` yet, when it does update the
@@ -367,7 +369,7 @@
         # the new password will be automatically hashed with the new algorithm.
         ansible.builtin.command: openssl passwd -6 "{{ encryption_password }}"
         register: encryption_password_hash
-      - name: root account - manually add the hashed password to `/etc/shadow`
+      - name: Root - manually add the hashed password to `/etc/shadow`
         # Do it manually, the `user` module would affect the root user of the 
         # live environment.
         ansible.builtin.replace:
@@ -397,14 +399,14 @@
 
     - name: Create a key file to avoid typing the encryption password twice during boot
       block:
-      - name: initramfs - create an empty file
+      - name: Initramfs - Create an empty file
         ansible.builtin.shell: arch-chroot /mnt dd bs=512 count=4 if=/dev/urandom of=/crypto_keyfile.bin
-      - name: initramfs - append the encryption key to it
+      - name: Initramfs - Append the encryption key to it
         ansible.builtin.shell: echo "{{ encryption_password }}" | arch-chroot /mnt  cryptsetup luksAddKey {{ installation_block_device_name }}{{ main_partition_number }} /crypto_keyfile.bin -
-      - name: initramfs - remove all permissions for security reasons
+      - name: Initramfs - Remove all permissions for security reasons
         ansible.builtin.command: arch-chroot /mnt chmod 000 /crypto_keyfile.bin
 
-    - name: Change configuration options for the `mkinitcpio` script
+    - name: Initramfs - Change configuration options for the `mkinitcpio` script
       # mkinitcpio is a Bash script used to create an initial ramdisk environment
       ansible.builtin.lineinfile:
         dest: /mnt/etc/mkinitcpio.conf
@@ -416,7 +418,7 @@
         # Add the `encrypt` and `lvm2` hooks
         - { regex: ^HOOKS, line: HOOKS=(base udev autodetect modconf kms keyboard keymap consolefont block encrypt lvm2 filesystems fsck) }
 
-    - name: Generate the initial ramdisk image for `linux`
+    - name: Initramfs - Generate the initial ramdisk image for `linux`
       ansible.builtin.command: arch-chroot /mnt mkinitcpio -P
 
 
@@ -425,12 +427,12 @@
 
     #     https://wiki.archlinux.org/title/Arch_boot_process#Boot_loader
 
-    - name: Create '/boot/EFI' directory (UEFI only)
+    - name: Bootloader - Create '/boot/EFI' directory (UEFI only)
       when: firmware == 'uefi'
       ansible.builtin.file:
         path: /mnt/boot/EFI
         state: directory
-    - name: Mount the EFI partition (UEFI only)
+    - name: Bootloader - Mount the EFI partition (UEFI only)
       when: firmware == 'uefi'
       ansible.posix.mount:
         src: "{{ installation_block_device_name }}{{ efi_partition_number }}"
@@ -438,16 +440,16 @@
         fstype: vfat
         state: mounted
 
-    - name: Install GRUB (BIOS)
+    - name: Bootloader - Install GRUB (BIOS)
       when: firmware == 'bios'
       # pass a disk as an argument, not a partition
       ansible.builtin.command: "arch-chroot /mnt grub-install --target=i386-pc {{ installation_block_device_name }}"
-    - name: Install GRUB (UEFI)
+    - name: Bootloader - Install GRUB (UEFI)
       when: firmware == 'uefi'
       # https://wiki.archlinux.org/title/GRUB#Installation
       ansible.builtin.command: "arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot/EFI --bootloader-id=GRUB"
 
-    - name: Configure GRUB to unlock the encrypted partiton at boot time and to allow-discards (if supported)
+    - name: Bootloader - Configure GRUB to unlock the encrypted partiton at boot time and to allow-discards (if supported)
       # https://wiki.archlinux.org/title/GRUB#Configuration
       ansible.builtin.lineinfile:
         dest: /mnt/etc/default/grub
@@ -457,9 +459,9 @@
         # Enable encryption
         - { regex: ^#GRUB_ENABLE_CRYPTODISK, line: GRUB_ENABLE_CRYPTODISK=y }
         # Enable TRIM (if supported) and encryption
-        - { regex: ^GRUB_CMDLINE_LINUX="", line: "GRUB_CMDLINE_LINUX=\"{{ disk_discard_support | ternary('cryptdevice={{ installation_block_device_name }}{{ main_partition_number }}:crypt:allow-discards', 'cryptdevice={{ installation_block_device_name }}{{ main_partition_number }}:crypt') }}\"" }
+        - { regex: ^GRUB_CMDLINE_LINUX="", line: "GRUB_CMDLINE_LINUX=\"{{ disk_discard_support | ternary('cryptdevice={{ installation_block_device_name }}{{ main_partition_number }}:{{ luks_device_name }}:allow-discards', 'cryptdevice={{ installation_block_device_name }}{{ main_partition_number }}:{{ luks_device_name }}') }}\"" }
 
-    - name: Generate the GRUB configuration file
+    - name: Bootloader - Generate the GRUB configuration file
       ansible.builtin.command: "arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg"
 
 
@@ -488,7 +490,7 @@
 
     # --- Reboot and exit playbook ---
 
-    - name: Shutdown
+    - name: Shutting down after successful installation
       community.general.shutdown:
 
     - name: Exit playbook gracefully

@@ -22,7 +22,7 @@ password: !vault |
 
 #     Encryption password - will be used:
 #       - To encrypt the local disk.
-#       - As the root user's password (if root user is not disabled).
+
 #       - To encrypt/decrypt variables of the second script.
 encryption_password: !vault |
           $ANSIBLE_VAULT;1.1;AES256
@@ -46,16 +46,13 @@ installation_block_device_name: /dev/sda
 
 #     Size for the system logical volume, user files will be stored on another 
 #     logical volume (remainder space).
-system_size_in_gb: 32
+space_for_system_files_in_gb: 32
 
 #     Use 0 for no swap or a multiple of 1024.
 swap_size_in_mb: 4096
 
 #     If set to `false` the encryption password will be used as the root password.
 disable_root_login: true
-
-#     If set to `true` writting random data to disk will take several hours.
-securely_erase_disk: false
 
 #     https://wiki.archlinux.org/title/Linux_console/Keyboard_configuration
 # console_keymap: us
@@ -69,6 +66,18 @@ securely_erase_disk: false
 #   - es_EC
 
 
+# --- Playbook variables -------------------------------------------------------
+
+#     No need to change!
+
+#     Just to make sure you don't break the playbook in case you decide to 
+#     change the names
+
+luks_device_name: crypt
+lvm_vg_name: lvm
+
+
+
 # --- Anible configurations ----------------------------------------------------
 
 #     Do not change!
@@ -78,4 +87,5 @@ securely_erase_disk: false
 #     `host_key_checking = False` in the `ansible.cfg` file but it still gives
 #     me an error when there is already an entry for the given host.
 ansible_ssh_common_args: -o "StrictHostKeyChecking no" -o "UserKnownHostsFile /dev/null"
+
 
