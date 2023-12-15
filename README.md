@@ -87,6 +87,8 @@ This playbook does the following:
      ansible-playbook --extra-vars "username={USERNAME}" --vault-password-file ~/.vault_key --ask-pass local.yml
      ```
 
+     > If you get any weird errors related to previous state of the target installation disk try completely removing the disk data with `dd if=/dev/zero of={{ /dev/sdX }} bs=4M status=progress`.
+
      You will be prompted for the root password of the managed node (the one you changed recently). If no errors occur the managed node will shutdown automatically after a successful installation.
 
      Remove install media and turn it back on.
