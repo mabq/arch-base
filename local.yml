@@ -18,7 +18,7 @@
     # Store some important information about the system into variables that 
     # we will use later on.
 
-    - name: Check `efivars` directory existance
+    - name: Check `efivars` directory existence
       ansible.builtin.stat:
         path: /sys/firmware/efi/efivars
       register: efivars
@@ -243,17 +243,27 @@
     # --- Install packages -----------------------------------------------------
 
     - name: Install base packages
-      ansible.builtin.command: pacstrap /mnt base linux linux-firmware grub lvm2 networkmanager
+      # `base`              # Minimal package set to define a basic Arch Linux installation
+      # `base-devel`        # Basic tools to build Arch Linux packages (required by `arch-setup` playbook)
+      # `linux`             # The Linux kernel and modules
+      # `linux-firmware`    # Firmware files for Linux
+      # `grub`              # GNU GRand Unified Bootloader (2)
+      # `lvm2`              # Logical Volume Manager 2 utilities
+      ansible.builtin.command: pacstrap /mnt base base-devel linux linux-firmware grub lvm2
 
-    - name: Install basic tools
-      # `sudo` is required in case of disable-root-login
-      # `git` is required to run `ansible-pull` on the second script
-      ansible.builtin.command: pacstrap /mnt sudo neovim openssh ansible git
+    - name: Install essential tools
+      # `networkmanager`    # Network connection manager and user applications
+      # `sudo`              # Give certain users the ability to run some commands as root
+      # `neovim`            # Fork of Vim aiming to improve user experience, plugins, and GUIs
+      # `openssh`           # SSH protocol implementation for remote login, command execution and file transfer
+      # `ansible`           # Official assortment of Ansible collections (required to run `ansible-pull` on the second script)
+      # `git`               # The fast distributed version control system (required to run `ansible-pull` on the second script)
+      ansible.builtin.command: pacstrap /mnt networkmanager sudo neovim openssh ansible git
 
     - name: Install `efibootmgr` (UEFI only)
-      # used by the GRUB installation script to write boot entries to NVRAM
-      when: firmware == 'uefi'
+      # `efibootmgr`        # Linux user-space application to modify the EFI Boot Manager (used by the GRUB installation script to write boot entries to NVRAM)
       ansible.builtin.command: pacstrap /mnt efibootmgr
+      when: firmware == 'uefi'
 
 
 

@@ -8,7 +8,7 @@
 #
 #     See README for instructions to encrypt values in Ansible.
 #
-#     Change them here to apply to all hosts or in the corresponging 
+#     Change them here to apply to all hosts or in the corresponding
 #     `host_vars/{HOSTNAME}.yml` file.
 
 #     User password:
