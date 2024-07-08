@@ -44,31 +44,31 @@ This playbook does the following:
 1. On the **managed node** (where you want to install Archlinux):
 
    - Boot from the [installation image](https://archlinux.org/download/).
-   
+
    - Change the password of the root user:
-   
+
      ```bash
      # Use a simple password, its only temporary.
      passwd
      ```
-   
+
    - Annotate the IP address:
-   
+
      ```bash
      # Use `iwctl` if you need to connect to a wireless network.
      ip a
      ```
-   
+
 2. On the **controller node**:
 
    - Clone this repository:
-   
+
      ```bash
      git clone git@github.com:mabq/arch-base.git
-     ``` 
-   
+     ```
+
    - Review the `hosts.ini` file --- make sure the hostname you intend to assign to the managed node is listed there.
-   
+
    - Make sure there is a file matching that hostname in `host_vars/{HOSTNAME}.yml` --- the variable `ansible_host` must be pointing to the correct IP address (the one you just checked).
 
    - Read the `group_vars/all.yml` file, you may need to overwrite one or more of the default variables, pay special attention to the following variables: 
