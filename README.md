@@ -43,9 +43,9 @@ This playbook does the following:
 
 1. On the **managed node** (where you want to install Archlinux):
 
-   - Boot from the [installation image](https://archlinux.org/download/).
+   - Boot from the [installation image](https://archlinux.org/download/). See [installation guide](https://wiki.archlinux.org/title/Installation_guide) for more info.
 
-   - Change the password of the root user:
+   - Once booted, change the root password:
 
      ```bash
      # Use a simple password, its only temporary.
