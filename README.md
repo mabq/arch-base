@@ -20,23 +20,17 @@ It fails with disk encryption enabled, but more importantly with Ansible you are
 
 ## About this playbook
 
-> To customize options see notes on `group_vars/all.yml`.
-
-> Some tasks in this playbook use the `ansible.builtin.command` module instead of the specialized module for the given task, this is because the specialized module would affect the Live Environment, not the actual installation. For example, the `ansible.builtin.user` module would create the user in the Live Environment instead of the actual installation. 
-
-This playbook does the following:
-
-- Only runs on systems booted from the Archlinux ISO.
-- Detects the firmware type and creates disk partitions accordingly. 
-    - Encrypts the main partition with LUKS.
-    - Creates an LVM volume group with two logical volumes, one for `/` and one for `/home`.
-    - Enables TRIM support if supported by the disk.
-- Installs only basic packages plus a few required to run the `arch-setup` playbook later on.
-- Does not configure the system, configuration is done on the `arch-setup` playbook.
-- Creates the user account giving it sudo privileges.
-    - Stores the encryption key in a file called `.vault_key` in the user's home directory.
-- Enables or disables the root account, as instructed.
-- Enables SWAP, as instructed.
+  - Only runs on systems booted from the Archlinux ISO.
+  - Detects the firmware type and creates disk partitions accordingly.
+      - Encrypts the main partition with LUKS.
+      - Creates an LVM volume group with two logical volumes, one for `/` and one for `/home`.
+      - Enables TRIM support if supported by disk.
+  - Installs only basic packages plus a few required to run the `arch-setup` playbook later on.
+  - Does not configure the system, configuration is done on the `arch-setup` playbook.
+  - Creates the user account, giving it sudo privileges.
+      - Creates the file `~/.vault_key` with the encryption key on it. This key is used by the `arch-setup` script.
+  - Enables or disables the root account, as instructed.
+  - Enables SWAP, as instructed.
 
 
 ## Before running the script
@@ -59,6 +53,13 @@ This playbook does the following:
      ip a
      ```
 
+   - Optionally, completely erase disk data:
+
+     ```bash
+     # Make sure you select the correct disk, use the `lsblk` command
+     sudo dd if=/dev/zero of=/dev/sd{X} bs=4M status=progress
+     ```
+
 2. On the **controller node**:
 
    - Clone this repository:
@@ -67,11 +68,11 @@ This playbook does the following:
      git clone git@github.com:mabq/arch-base.git
      ```
 
-   - Review the `hosts.ini` file --- make sure the hostname you intend to assign to the managed node is listed there.
+   - Review the `hosts.ini` file --- make sure the hostname of the managed node you intend to affect is listed there.
 
-   - Make sure there is a file matching that hostname in `host_vars/{HOSTNAME}.yml` --- the variable `ansible_host` must be pointing to the correct IP address (the one you just checked).
+   - Default options for all hosts are defined in `group_vars/all.yml`. You can overwrite any variable for a given host on `host_vars/{HOSTNAME}.yml`:
 
-   - Read the `group_vars/all.yml` file, you may need to overwrite one or more of the default variables, pay special attention to the following variables: 
+     - Make sure the variable `ansible_host` is pointing to the correct IP address.
 
      - `target_disk` --- use `fdisk -l` on the managed node to identify the [block device name](https://wiki.archlinux.org/title/Device_file#Block_devices).
 
@@ -87,29 +88,29 @@ This playbook does the following:
      ansible-playbook --extra-vars "username={USERNAME}" --vault-password-file ~/.vault_key --ask-pass local.yml
      ```
 
-     > If you get any weird errors related to previous state of the target installation disk try completely removing the disk data with `dd if=/dev/zero of=/dev/sd{X} bs=4M status=progress`.
+     > If you don't have the `~/.vault_key` file yet on the controller machine, create one following the instructions below.
 
-     You will be prompted for the root password of the managed node (the one you changed recently). If no errors occur the managed node will shutdown automatically after a successful installation.
+     > If you get any weird errors related to previous state of the target installation disk try completely erasing disk data as instructed above.
 
-     Remove install media and turn it back on.
+     > You will be prompted for the root password of the managed node (the one you changed recently). If no errors occur the managed node will shutdown automatically after a successful installation.
 
-     Use the `nmtui` command to connect to a wireless network.
+   - Remove install media and turn it back on.
+
+   - Use the `nmtui` command to connect to a wireless network.
 
 
 ## How to encrypt a variable value with Ansible
 
-First store the encryption password in a file to avoid any typos:
+First, create the `~/.vault_key` file with the encryption password to avoid any typos:
 
    ```bash
    echo "{encryption-password-here}" > ~/.vault_key; chmod 600 ~/.vault_key
    ```
 
-Encrypt the variable value:
+Then, you can create encrypted the variables with the following command:
 
    ```bash
    ansible-vault encrypt_string '{TEXT_TO_ENCRYPT}' --vault-password-file ~/.vault_key --name '{VARIABLE_NAME}'`
    ```
 
 Copy the encrypted output and paste it in `/group_vars/all.yml` or in the corresponding `host_vars/{HOSTNAME}.yml`.
-
-

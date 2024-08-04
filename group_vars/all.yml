@@ -3,7 +3,6 @@
 #     The `username` variable must be passed as a command-line argument,
 #     see README.
 
-
 # --- Encrypted variables ------------------------------------------------------
 #
 #     See README for instructions to encrypt values in Ansible.
@@ -13,38 +12,36 @@
 
 #     User password:
 password: !vault |
-          $ANSIBLE_VAULT;1.1;AES256
-          31323138626364626366653238356564386439303562376331313537323338386135653937663166
-          6235666633663063653162636366333532613433316665360a653061663539316635303637643062
-          62323265303732663163396439646533313765643034356130383232616634643330623862633436
-          6137353731656561330a386132316232366130623831626663393965666131383265626635333431
-          6662
+  $ANSIBLE_VAULT;1.1;AES256
+  31323138626364626366653238356564386439303562376331313537323338386135653937663166
+  6235666633663063653162636366333532613433316665360a653061663539316635303637643062
+  62323265303732663163396439646533313765643034356130383232616634643330623862633436
+  6137353731656561330a386132316232366130623831626663393965666131383265626635333431
+  6662
 
 #     Encryption password - will be used:
 #       - To encrypt the local disk.
-
 #       - To encrypt/decrypt variables of the second script.
 encryption_password: !vault |
-          $ANSIBLE_VAULT;1.1;AES256
-          66363937626135333661653134623362326264333964316365373865353261323766313037326263
-          3235303565346462363861326637623739306530643062310a366461343830626531376330643936
-          61663234373234313161383262363766366635613864393264366334663330363736646561363263
-          3263383265366632370a303836356364333762656433626364303934633433353064373630333966
-          37333062623235663165633136333837326236323261383533643462636465323163326435616464
-          30356364386664303064346339333933663030353836393533623034656539356531373763653664
-          306230343666326337313231383033636534
-
+  $ANSIBLE_VAULT;1.1;AES256
+  66363937626135333661653134623362326264333964316365373865353261323766313037326263
+  3235303565346462363861326637623739306530643062310a366461343830626531376330643936
+  61663234373234313161383262363766366635613864393264366334663330363736646561363263
+  3263383265366632370a303836356364333762656433626364303934633433353064373630333966
+  37333062623235663165633136333837326236323261383533643462636465323163326435616464
+  30356364386664303064346339333933663030353836393533623034656539356531373763653664
+  306230343666326337313231383033636534
 
 # --- Hosts-default variables --------------------------------------------------
 
-#     Important! 
-#     Do not edit these variables here, overwrite them in the corresponding 
+#     Important!
+#     Do not edit these variables here, overwrite them in the corresponding
 #     `host_vars/{HOSTNAME}.yml` file.
 
 #     Will be different for nvme disks, use `lsblk -f` to identify the disk.
 installation_block_device_name: /dev/sda
 
-#     Size for the system logical volume, user files will be stored on another 
+#     Size for the system logical volume, user files will be stored on another
 #     logical volume (remainder space).
 space_for_system_files_in_gb: 32
 
@@ -54,29 +51,12 @@ swap_size_in_mb: 4096
 #     If set to `false` the encryption password will be used as the root password.
 disable_root_login: true
 
-#     https://wiki.archlinux.org/title/Linux_console/Keyboard_configuration
-# console_keymap: us
-
-#     Default timezone.
-# timezone: 'America/Guayaquil'
-
-#     The first one will be the default.
-# locales:                                    
-#   - en_US
-#   - es_EC
-
-
 # --- Playbook variables -------------------------------------------------------
 
-#     No need to change!
-
-#     Just to make sure you don't break the playbook in case you decide to 
-#     change the names
+#     Just to make the script more flexible in case you want to change the names
 
 luks_device_name: crypt
 lvm_vg_name: lvm
-
-
 
 # --- Anible configurations ----------------------------------------------------
 
@@ -87,5 +67,3 @@ lvm_vg_name: lvm
 #     `host_key_checking = False` in the `ansible.cfg` file but it still gives
 #     me an error when there is already an entry for the given host.
 ansible_ssh_common_args: -o "StrictHostKeyChecking no" -o "UserKnownHostsFile /dev/null"
-
-
