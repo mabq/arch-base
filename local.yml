@@ -75,9 +75,7 @@
     - name: Disk - Remove any existing partitions
       block:
         - name: Disk - Get list of partitions
-          ansible.builtin.shell: |
-            lsblk -nr -o NAME "{{ installation_block_device_name }}"
-            awk -F'[^0-9]+' '{print $2}'
+          ansible.builtin.shell: lsblk -nr -o NAME "{{ installation_block_device_name }}" | awk -F'[^0-9]+' '{print $2}'
           register: existing_partition_list
         - name: Disk - Remove any existing partitions
           community.general.parted:
