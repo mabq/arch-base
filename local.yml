@@ -72,19 +72,17 @@
     #   ansible.builtin.command: wipefs --all --force "{{ installation_block_device_name }}"
     #   # ansible.builtin.command: find /dev -wholename "{{ installation_block_device_name }}*" -exec wipefs --force --all {} \;
 
-    - name: Disk - Remove any existing partitions
+    - name: Disk - Remove all partitions from disk
       block:
-        - name: Disk - Get list of partitions
-          ansible.builtin.shell: lsblk -nr -o NAME "{{ installation_block_device_name }}" | awk -F'[^0-9]+' '{print $2}'
-          register: existing_partition_list
-        - name: Disk - Remove any existing partitions
+        - name: Disk - Read device information (always use unit when probing)
+          community.general.parted: "device={{ installation_block_device_name }} unit=MiB"
+          register: partitions_info
+        - name: Remove all partitions from disk
           community.general.parted:
             device: "{{ installation_block_device_name }}"
-            # convert string to number
-            number: "{{ item | int }}"
+            number: "{{ item.num }}"
             state: absent
-          with_items: "{{ existing_partition_list }}"
-          when: item != "" # Ensure item is not empty
+          loop: "{{ partitions_info.partitions }}"
 
     - name: Create disk partitions for UEFI systems
       when: firmware == 'uefi'
