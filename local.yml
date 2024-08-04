@@ -84,7 +84,7 @@
             device: "{{ installation_block_device_name }}"
             number: "{{ item }}"
             state: absent
-          with_items: "{{ existing_partition_list.stdout_lines[1:] }}" # Skip the first line as it is the disk itself
+          with_items: "{{ existing_partition_list }}" # Skip the first line as it is the disk itself
           when: item != "" # Ensure item is not empty
 
     - name: Create disk partitions for UEFI systems
