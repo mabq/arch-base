@@ -6,11 +6,18 @@ To automate my Archlinux setup I created 2 ansible playbooks:
 2. [arch-setup](https://github.com/mabq/arch-setup) installs and configures all the tools I need
 
 
+## What do you need to run this playbook?
+
+  - A second computer with [Ansible](https://archlinux.org/packages/extra/any/ansible/). Since Ansible is not included in the [live environment](https://wiki.archlinux.org/title/Installation_guide#Boot_the_live_environment) this playbook must be executed from a [controller](https://docs.ansible.com/ansible/latest/getting_started/index.html#getting-started-with-ansible) machine.
+
+  - The encryption password.
+
+
 ## Why two different scrips?
 
-This playbook is meant to be used only once, when installing Arch --- since [ansible](https://archlinux.org/packages/extra/any/ansible/) is not included in the [live environment](https://wiki.archlinux.org/title/Installation_guide#Boot_the_live_environment) this playbook must be executed from a [controller](https://docs.ansible.com/ansible/latest/getting_started/index.html#getting-started-with-ansible) machine.
+This playbook is meant to be used only once, when installing Arch, from a controller machine.
 
-The second playbook is meant to be executed all the time from the same machine via `ansible-pull`.
+The `arch-setup` playbook is meant to be executed all the time from the same machine via `ansible-pull`.
 
 
 ## Why not use the `archinstall` script instead?
@@ -49,6 +56,8 @@ It fails with disk encryption enabled, but more importantly with Ansible you are
 
      ```bash
      # For SSDs (super fast):
+     blkdiscard -f /dev/sd{X}
+     # or...
      hdparm --user-master u --security-set-pass p /dev/sd{X}
      hdparm --user-master u --security-erase p /dev/sd{X}
 
