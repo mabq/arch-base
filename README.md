@@ -25,15 +25,17 @@ It fails with disk encryption enabled, but more importantly with Ansible you are
       - Encrypts the main partition with LUKS.
       - Sets up LVM on the main partition with two logical volumes; one for `/` and one for `/home`.
       - Enables TRIM support if supported by disk.
-  - Installs only basic packages plus a few required to run the `arch-setup` playbook later on.
+  - Installs only basic packages plus a few required packages to run the `arch-setup` playbook later on.
   - Does not configure the system, configuration is done on the `arch-setup` playbook.
   - Creates the user account, giving it sudo privileges.
-  - Generates the file `~/.vault_key` with the encryption key on it. This key is used by the `arch-setup` script.
+      - Generates the `.vault_key` file on the user's home directory. This file will be used by the `arch-setup` script.
   - Enables/disables the root account, as instructed.
+  - Sets up the initial ram filesystem.
+  - Configures GRUB as the bootloader.
   - Enables SWAP, as instructed.
 
 
-## Before running the script
+## How to run this playbook?
 
 1. On the **managed node** (where you want to install Archlinux):
 
@@ -56,7 +58,7 @@ It fails with disk encryption enabled, but more importantly with Ansible you are
 
      > Reboot and use `lsblk` to make sure disk has been wiped.
 
-   - Once booted, change the root password:
+   - Change the root password:
 
      ```bash
      passwd
@@ -80,24 +82,24 @@ It fails with disk encryption enabled, but more importantly with Ansible you are
 
    - Review the `hosts.ini` file --- make sure the hostname of the managed node you intend to affect is listed there.
 
-   - Make sure the following variables are correct before running the script:
+   - Make sure there is a configuration file for the managed node you intend to affect. Default options for all hosts are defined in `group_vars/all.yml`, specific host options are defined in `host_vars/{HOSTNAME}.yml`.
 
-     > Default options for all hosts are defined in `group_vars/all.yml`, you can overwrite any variable for a given host on each `host_vars/{HOSTNAME}.yml` file.
+   - Make sure the following variables are correct on the host options file:
 
      - `ansible_host` must be pointing to the correct IP address.
      - `installation_block_device_name` must be pointing to the correct [block device name](https://wiki.archlinux.org/title/Device_file#Block_devices).
 
-   - Run the script:
+   - Change directory into the cloned repository and run the playbook:
 
-     Change directory into the cloned repository and run:
+     > If you don't yet have the `~/.vault_key` file on the controller machine, create one with the instructions below.
 
      ```bash
      ansible-playbook --extra-vars "username={USERNAME}" --vault-password-file ~/.vault_key --ask-pass local.yml
      ```
 
-     > If you don't have the `~/.vault_key` file yet on the controller machine, create one following the instructions below.
+     When prompted, enter the password for the root user of the managed node (the one you just setup).
 
-     > You will be prompted for the root password of the managed node (the one you changed recently). If no errors occur the managed node will shutdown automatically after a successful installation.
+     Wait for the playbook to execute, if no errors occur the managed node will shutdown automatically after a successful installation.
 
    - Remove install media and turn it back on.
 

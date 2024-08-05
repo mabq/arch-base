@@ -3,6 +3,8 @@
 #     The `username` variable must be passed as a command-line argument,
 #     see README.
 
+#     See README for instructions to encrypt values in Ansible.
+
 #     ⚠️  Important!
 #     Do not edit these variables here, these are the default values, overwrite
 #     them in the corresponding `host_vars/{HOSTNAME}.yml` file.
@@ -17,14 +19,13 @@ swap_size_in_mb: 4096
 #     If set to `false` the encryption password will be used as the root password.
 disable_root_login: true
 
-# --- Encrypted variables ------------------------------------------------------
-#
-#     See README for instructions to encrypt values in Ansible.
-#
-#     Change them here to apply to all hosts or in the corresponding
-#     `host_vars/{HOSTNAME}.yml` file.
+#     Name for the encrypted partition
+luks_device_name: crypt
 
-#     User password:
+#     Name for the LVM volume group
+lvm_vg_name: lvm
+
+#     User password - must be encrypted, this is a public repository
 password: !vault |
   $ANSIBLE_VAULT;1.1;AES256
   31323138626364626366653238356564386439303562376331313537323338386135653937663166
@@ -33,9 +34,9 @@ password: !vault |
   6137353731656561330a386132316232366130623831626663393965666131383265626635333431
   6662
 
-#     Encryption password - will be used:
-#       - To encrypt the local disk.
-#       - To encrypt/decrypt variables of the second script.
+#     Encryption password - must be encrypted, this is a public repository
+#       Used to encrypt/decrypt the disk and variables used in the arch-setup script.
+#
 encryption_password: !vault |
   $ANSIBLE_VAULT;1.1;AES256
   66363937626135333661653134623362326264333964316365373865353261323766313037326263
@@ -46,16 +47,7 @@ encryption_password: !vault |
   30356364386664303064346339333933663030353836393533623034656539356531373763653664
   306230343666326337313231383033636534
 
-# --- Playbook variables -------------------------------------------------------
-
-#     Just to make the script more flexible in case you want to change the names
-
-luks_device_name: crypt
-lvm_vg_name: lvm
-
 # --- Anible configurations ----------------------------------------------------
-
-#     Do not change!
 
 #     Avoid checking the `~/.ssh/known_hosts` file because everytime I boot the
 #     managed node from the Live Environment it changes. Tried to use
