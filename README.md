@@ -2,13 +2,14 @@
 
 To automate my Archlinux setup I created 2 ansible playbooks:
 
-1. [arch-base](https://github.com/mabq/arch-base) (this repo) - fully automates a [basic Archlinux installation](https://wiki.archlinux.org/title/Installation_guide)
-2. [arch-setup](https://github.com/mabq/arch-setup) installs and configures all the tools I need
+1. [Arch-base](https://github.com/mabq/arch-base) (this repo) - fully automates a [basic Archlinux installation](https://wiki.archlinux.org/title/Installation_guide).
+
+2. [Arch-setup](https://github.com/mabq/arch-setup) installs and configures everything.
 
 
 ## What do you need to run this playbook?
 
-  - A second computer with [Ansible](https://archlinux.org/packages/extra/any/ansible/). Since Ansible is not included in the [live environment](https://wiki.archlinux.org/title/Installation_guide#Boot_the_live_environment) this playbook must be executed from a [controller](https://docs.ansible.com/ansible/latest/getting_started/index.html#getting-started-with-ansible) machine.
+  - A second computer with [Ansible](https://archlinux.org/packages/extra/any/ansible/) installed -- Ansible is not included in the Archlinux [live environment](https://wiki.archlinux.org/title/Installation_guide#Boot_the_live_environment), so this playbook must be executed from a [controller](https://docs.ansible.com/ansible/latest/getting_started/index.html#getting-started-with-ansible) node.
 
   - The encryption password.
 
@@ -89,11 +90,9 @@ It fails with disk encryption enabled, but more importantly with Ansible you are
      git clone git@github.com:mabq/arch-base.git
      ```
 
-   - Review the `hosts.ini` file --- make sure the hostname of the managed node you intend to affect is listed there.
+   - Review the `hosts.ini` file. Make sure the hostname of the managed node you intend to affect is listed there.
 
-   - Make sure there is a configuration file for the managed node you intend to affect. Default options for all hosts are defined in `group_vars/all.yml`, specific host options are defined in `host_vars/{HOSTNAME}.yml`.
-
-   - Make sure the following variables are correct on the host options file:
+   - Default options for all hosts are defined in `group_vars/all.yml`. You can overwrite any options for each host on `host_vars/{HOSTNAME}.yml` file. Make sure the following variables are correct for each host:
 
      - `ansible_host` must be pointing to the correct IP address.
      - `installation_block_device_name` must be pointing to the correct [block device name](https://wiki.archlinux.org/title/Device_file#Block_devices).
