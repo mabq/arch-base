@@ -23,13 +23,13 @@ It fails with disk encryption enabled, but more importantly with Ansible you are
   - Only runs on systems booted from the Archlinux ISO.
   - Detects the firmware type and creates disk partitions accordingly.
       - Encrypts the main partition with LUKS.
-      - Creates an LVM volume group with two logical volumes, one for `/` and one for `/home`.
+      - Sets up LVM on the main partition with two logical volumes; one for `/` and one for `/home`.
       - Enables TRIM support if supported by disk.
   - Installs only basic packages plus a few required to run the `arch-setup` playbook later on.
   - Does not configure the system, configuration is done on the `arch-setup` playbook.
   - Creates the user account, giving it sudo privileges.
-      - Creates the file `~/.vault_key` with the encryption key on it. This key is used by the `arch-setup` script.
-  - Enables or disables the root account, as instructed.
+  - Generates the file `~/.vault_key` with the encryption key on it. This key is used by the `arch-setup` script.
+  - Enables/disables the root account, as instructed.
   - Enables SWAP, as instructed.
 
 
@@ -37,7 +37,22 @@ It fails with disk encryption enabled, but more importantly with Ansible you are
 
 1. On the **managed node** (where you want to install Archlinux):
 
-   - Boot from the [installation image](https://archlinux.org/download/). See [installation guide](https://wiki.archlinux.org/title/Installation_guide) for more info.
+   - Boot from the [installation image](https://archlinux.org/download/). Visit the [installation guide](https://wiki.archlinux.org/title/Installation_guide) for more information.
+
+   - Optionally, securely erase disk data:
+
+     > This step is mandatory if the disk was previously setup with LVM.
+
+     ```bash
+     # For SSDs (super fast):
+     hdparm --user-master u --security-set-pass p /dev/sd{X}
+     hdparm --user-master u --security-erase p /dev/sd{X}
+
+     # For spinning drives (super slow):
+     sudo dd if=/dev/zero of=/dev/sd{X} bs=4M status=progress
+     ```
+
+     > Reboot and use `lsblk` to make sure disk has been wiped.
 
    - Once booted, change the root password:
 
@@ -51,13 +66,6 @@ It fails with disk encryption enabled, but more importantly with Ansible you are
      ```bash
      # Use `iwctl` if you need to connect to a wireless network.
      ip a
-     ```
-
-   - Optionally, completely erase disk data:
-
-     ```bash
-     # Make sure you select the correct disk, use the `lsblk` command
-     sudo dd if=/dev/zero of=/dev/sd{X} bs=4M status=progress
      ```
 
 2. On the **controller node**:
@@ -89,8 +97,6 @@ It fails with disk encryption enabled, but more importantly with Ansible you are
      ```
 
      > If you don't have the `~/.vault_key` file yet on the controller machine, create one following the instructions below.
-
-     > If you get any weird errors related to previous state of the target installation disk try completely erasing disk data as instructed above.
 
      > You will be prompted for the root password of the managed node (the one you changed recently). If no errors occur the managed node will shutdown automatically after a successful installation.
 

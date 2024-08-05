@@ -68,9 +68,10 @@
         msg: "efi_partition_number = {{ efi_partition_number }}, boot_partition_number = {{ boot_partition_number }}, main_partition_number = {{ main_partition_number }}"
 
     # --- Disk configuration ---------------------------------------------------
-    # - name: Disk - Erase any existing filesystem and partition table signatures
-    #   ansible.builtin.command: wipefs --all --force "{{ installation_block_device_name }}"
-    #   # ansible.builtin.command: find /dev -wholename "{{ installation_block_device_name }}*" -exec wipefs --force --all {} \;
+
+    # If you want to run this script on a disk with previous LVM structures you
+    # will need to overwrite all disk content to delete all previous LVM structures.
+    # This will avoid any possible data corruption later on.
 
     - name: Disk - Remove all partitions from disk
       block:
@@ -83,6 +84,7 @@
             number: "{{ item.num }}"
             state: absent
           loop: "{{ partitions_info.partitions }}"
+          ignore_errors: true
 
     - name: Create disk partitions for UEFI systems
       when: firmware == 'uefi'
@@ -155,32 +157,39 @@
         name: "{{ luks_device_name }}"
         passphrase: "{{ encryption_password }}"
 
-    - name: LVM - Create volume group (the physical volume is automatically created)
-      # Logical Volume Manager (LVM) is a storage management solution that
-      # provides a more flexible way to manage disk space compared to
-      # traditional partitioning.
-      community.general.lvg:
-        force: true
-        reset_pv_uuid: true
-        pvs: ["/dev/mapper/{{ luks_device_name }}"]
-        reset_vg_uuid: true
-        pvresize: true
-        vg: "{{ lvm_vg_name }}"
-        state: active
-      ignore_errors: true
-    - name: LVM - Create 'root' logical volume
-      community.general.lvol:
-        vg: "{{ lvm_vg_name }}"
-        lv: root
-        size: "{{ space_for_system_files_in_gb }}G"
-        active: true
-    - name: LVM - Create 'home' logical volume
-      community.general.lvol:
-        vg: "{{ lvm_vg_name }}"
-        lv: home
-        # use all remaining space for user files
-        size: +100%FREE
-        active: true
+    - name: LVM
+      block:
+        # Logical Volume Manager (LVM) is a storage management solution that
+        # provides a more flexible way to manage disk space compared to
+        # traditional partitioning.
+        #   - Physical Volumes (PVs): The raw storage devices or partitions
+        #     initialized for LVM use.
+        #   - Volume Groups (VGs): Pools of storage created from one or more
+        #     PVs, providing a single storage resource.
+        #   - Logical Volumes (LVs): Virtual block devices created from the
+        #     space within a VG, used to store data and create file systems.
+        - name: LVM - Create the volume group
+          community.general.lvg:
+            # Comma separated list of partitions. Listed partitions will
+            # be automatically initialized as physical volumes for this
+            # volume group. The volume group will consist of just the
+            # main partition.
+            pvs: ["/dev/mapper/{{ luks_device_name }}"]
+            vg: "{{ lvm_vg_name }}"
+            state: active
+        - name: LVM - Create 'root' logical volume
+          community.general.lvol:
+            vg: "{{ lvm_vg_name }}"
+            lv: root
+            size: "{{ space_for_system_files_in_gb }}G"
+            active: true
+        - name: LVM - Create 'home' logical volume
+          community.general.lvol:
+            vg: "{{ lvm_vg_name }}"
+            lv: home
+            # use all remaining space for user files
+            size: +100%FREE
+            active: true
 
     - name: Disk - Format EFI partition (UEFI only)
       when: firmware == 'uefi'
