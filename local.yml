@@ -156,11 +156,12 @@
         passphrase: "{{ encryption_password }}"
 
     - name: LVM - Remove existing volume group
-      # When re-installing, if there was already a logical volume group with this
-      # name, trying to to re-create one will throw an error.
+      # When re-installing, if there was already a logical volume group with the
+      # same name, trying to to re-create it will throw an error. Remove it first.
       community.general.lvg:
         vg: "{{ lvm_vg_name }}"
         state: absent
+      ignore_errors: true
     - name: LVM - Create volume group (the physical volume is automatically created)
       # Logical Volume Manager (LVM) is a storage management solution that
       # provides a more flexible way to manage disk space compared to
