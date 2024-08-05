@@ -94,6 +94,7 @@ It fails with disk encryption enabled, but more importantly with Ansible you are
      > If you don't yet have the `~/.vault_key` file on the controller machine, create one with the instructions below.
 
      ```bash
+     # replace {USERNAME} with the username you want
      ansible-playbook --extra-vars "username={USERNAME}" --vault-password-file ~/.vault_key --ask-pass local.yml
      ```
 
