@@ -39,6 +39,8 @@ It fails with disk encryption enabled, but more importantly with Ansible you are
 
    - Boot from the [installation image](https://archlinux.org/download/). Visit the [installation guide](https://wiki.archlinux.org/title/Installation_guide) for more information.
 
+   - Run the `lsblk` command to identify the target disk for the installation.
+
    - Optionally, securely erase disk data:
 
      > This step is mandatory if the disk was previously setup with LVM.
@@ -70,7 +72,7 @@ It fails with disk encryption enabled, but more importantly with Ansible you are
 
 2. On the **controller node**:
 
-   - Clone this repository:
+   - Clone this repository (if already cloned, make sure to commit all changes):
 
      ```bash
      git clone git@github.com:mabq/arch-base.git
@@ -78,15 +80,12 @@ It fails with disk encryption enabled, but more importantly with Ansible you are
 
    - Review the `hosts.ini` file --- make sure the hostname of the managed node you intend to affect is listed there.
 
-   - Default options for all hosts are defined in `group_vars/all.yml`. You can overwrite any variable for a given host on `host_vars/{HOSTNAME}.yml`:
+   - Make sure the following variables are correct before running the script:
 
-     - Make sure the variable `ansible_host` is pointing to the correct IP address.
+     > Default options for all hosts are defined in `group_vars/all.yml`, you can overwrite any variable for a given host on each `host_vars/{HOSTNAME}.yml` file.
 
-     - `target_disk` --- use `fdisk -l` on the managed node to identify the [block device name](https://wiki.archlinux.org/title/Device_file#Block_devices).
-
-     - `password` --- is the password for the user account (see below how to encrypt a variable value).
-
-     - `encryption_password` --- is the password used to encrypt the disk, make sure it is long and random.
+     - `ansible_host` must be pointing to the correct IP address.
+     - `installation_block_device_name` must be pointing to the correct [block device name](https://wiki.archlinux.org/title/Device_file#Block_devices).
 
    - Run the script:
 

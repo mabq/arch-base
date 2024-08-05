@@ -1,7 +1,21 @@
-# --- Notes --------------------------------------------------------------------
+# --- Hosts-default variables --------------------------------------------------
 
 #     The `username` variable must be passed as a command-line argument,
 #     see README.
+
+#     ⚠️  Important!
+#     Do not edit these variables here, these are the default values, overwrite
+#     them in the corresponding `host_vars/{HOSTNAME}.yml` file.
+
+#     Size for the system logical volume, user files will be stored on another
+#     logical volume (remainder space).
+space_for_system_files_in_gb: 32
+
+#     Use 0 for no swap or a multiple of 1024.
+swap_size_in_mb: 4096
+
+#     If set to `false` the encryption password will be used as the root password.
+disable_root_login: true
 
 # --- Encrypted variables ------------------------------------------------------
 #
@@ -31,25 +45,6 @@ encryption_password: !vault |
   37333062623235663165633136333837326236323261383533643462636465323163326435616464
   30356364386664303064346339333933663030353836393533623034656539356531373763653664
   306230343666326337313231383033636534
-
-# --- Hosts-default variables --------------------------------------------------
-
-#     Important!
-#     Do not edit these variables here, overwrite them in the corresponding
-#     `host_vars/{HOSTNAME}.yml` file.
-
-#     Will be different for nvme disks, use `lsblk -f` to identify the disk.
-installation_block_device_name: /dev/sda
-
-#     Size for the system logical volume, user files will be stored on another
-#     logical volume (remainder space).
-space_for_system_files_in_gb: 32
-
-#     Use 0 for no swap or a multiple of 1024.
-swap_size_in_mb: 4096
-
-#     If set to `false` the encryption password will be used as the root password.
-disable_root_login: true
 
 # --- Playbook variables -------------------------------------------------------
 
