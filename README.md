@@ -7,18 +7,18 @@ To automate my Archlinux setup I created 2 ansible playbooks:
 2. [Arch-setup](https://github.com/mabq/arch-setup) installs and configures everything.
 
 
-## What do you need to run this playbook?
-
-  - A second computer with [Ansible](https://archlinux.org/packages/extra/any/ansible/) installed -- Ansible is not included in the Archlinux [live environment](https://wiki.archlinux.org/title/Installation_guide#Boot_the_live_environment), so this playbook must be executed from a [controller](https://docs.ansible.com/ansible/latest/getting_started/index.html#getting-started-with-ansible) node.
-
-  - The encryption password.
-
-
 ## Why two different scrips?
 
 This playbook is meant to be used only once, when installing Arch, from a controller machine.
 
 The `arch-setup` playbook is meant to be executed all the time from the same machine via `ansible-pull`.
+
+
+## What do you need to run this playbook?
+
+  - A second computer with [Ansible](https://archlinux.org/packages/extra/any/ansible/) installed -- Ansible is not included in the Archlinux [live environment](https://wiki.archlinux.org/title/Installation_guide#Boot_the_live_environment), so this playbook must be executed from a [controller](https://docs.ansible.com/ansible/latest/getting_started/index.html#getting-started-with-ansible) node.
+
+  - The encryption password.
 
 
 ## Why not use the `archinstall` script instead?
