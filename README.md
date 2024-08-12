@@ -3,7 +3,6 @@
 To automate my Archlinux setup I created 2 ansible playbooks:
 
 1. [Arch-base](https://github.com/mabq/arch-base) (this repo) - fully automates a [basic Archlinux installation](https://wiki.archlinux.org/title/Installation_guide).
-
 2. [Arch-setup](https://github.com/mabq/arch-setup) installs and configures everything.
 
 
@@ -51,22 +50,27 @@ It fails with disk encryption enabled, but more importantly with Ansible you are
 
    - Run the `lsblk` command to identify the target disk for the installation.
 
-   - Optionally, securely erase disk data:
+   - Format the target disk to remove all previous partitions and LVM logical volumes.
 
-     > This step is mandatory if the disk was previously setup with LVM.
+     ```bash
+     mkfs.exfat /dev/sd{X}
+     ```
+
+   - Optionally, securely erase disk data by writing zeros on the entire disk:
+
+     <!-- > This step is mandatory if the disk was previously setup with LVM. -->
 
      ```bash
      # For SSDs (super fast):
-     blkdiscard -f /dev/sd{X}
-     # or...
-     hdparm --user-master u --security-set-pass p /dev/sd{X}
-     hdparm --user-master u --security-erase p /dev/sd{X}
+     # hdparm --user-master u --security-set-pass p /dev/sd{X}
+     # hdparm --user-master u --security-erase p /dev/sd{X}
+     # ...if that does not work try with `blkdiscard -f /dev/sd{X}`
 
      # For spinning drives (super slow):
      sudo dd if=/dev/zero of=/dev/sd{X} bs=4M status=progress
      ```
 
-     > Reboot and use `lsblk` to make sure disk has been wiped.
+     <!-- > Important! - reboot and use `lsblk` to make sure disk has been wiped (no partitions). -->
 
    - Change the root password:
 
