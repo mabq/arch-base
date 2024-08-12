@@ -52,25 +52,22 @@ It fails with disk encryption enabled, but more importantly with Ansible you are
 
    - Format the target disk to remove all previous partitions and LVM logical volumes.
 
+     This step avoids errors while creating new logical volumes.
+
      ```bash
      mkfs.exfat /dev/sd{X}
      ```
 
    - Optionally, securely erase disk data by writing zeros on the entire disk:
 
-     <!-- > This step is mandatory if the disk was previously setup with LVM. -->
-
      ```bash
      # For SSDs (super fast):
-     # hdparm --user-master u --security-set-pass p /dev/sd{X}
-     # hdparm --user-master u --security-erase p /dev/sd{X}
-     # ...if that does not work try with `blkdiscard -f /dev/sd{X}`
+     hdparm --user-master u --security-set-pass p /dev/sd{X}
+     hdparm --user-master u --security-erase p /dev/sd{X}
 
      # For spinning drives (super slow):
      sudo dd if=/dev/zero of=/dev/sd{X} bs=4M status=progress
      ```
-
-     <!-- > Important! - reboot and use `lsblk` to make sure disk has been wiped (no partitions). -->
 
    - Change the root password:
 
