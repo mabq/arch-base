@@ -129,6 +129,8 @@ Copy the encrypted output and paste it in `/group_vars/all.yml` or in the corres
 
 ## Correct macbook flickering issues
 
+> Solution found [here](https://ubuntuforums.org/showthread.php?t=2498385).
+
 - Edit the GRUB config file:
 
   ```bash
@@ -136,7 +138,8 @@ Copy the encrypted output and paste it in `/group_vars/all.yml` or in the corres
   sudo nvim /etc/default/grub
   ```
  
-  Add the option `nouveau.NvMXMDCB=0` to the `GRUB_CMDLINE_LINUX_DEFAULT` variable. Save and close the file.
+  Add the option `nouveau.NvMXMDCB=0` to the `GRUB_CMDLINE_LINUX_DEFAULT` variable.
+  Save and close the file.
 
 - Re-build grub:
 
@@ -145,6 +148,3 @@ Copy the encrypted output and paste it in `/group_vars/all.yml` or in the corres
   ```
 
 - Reboot
-
-
-
