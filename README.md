@@ -52,7 +52,7 @@ It fails with disk encryption enabled, but more importantly with Ansible you are
 
    - Run the `lsblk` command to identify the target disk for the installation.
 
-   - Optionally, securely erase all data on disk:
+   - Optionally, [securely erase](https://wiki.archlinux.org/title/Securely_wipe_disk) all data on disk:
 
      > This is recommended to avoid any errors, on SSD if super fast, on normal hard drives it will take a while.
 

@@ -166,8 +166,12 @@
         dev: "/dev/mapper/{{ luks_device_name }}"
         fstype: ext4
 
-    # This directory is created in the filesystem of the live environment,
+    # These directories are created in the filesystem of the live environment,
     # which is running completely from memory.
+    - name: Disk - Create directory for '/home'
+      ansible.builtin.file:
+        path: /mnt/home
+        state: directory
     - name: Disk - Create directory for '/boot'
       ansible.builtin.file:
         path: /mnt/boot
@@ -175,14 +179,14 @@
 
     # Here we mount the physical devices to the corresponding directories of
     # the live environment file system.
-    - name: Disk - Mount the `root` logical volume to `/mnt`
+    - name: Disk - Mount the `root` partition to `/mnt`
       # Does `/mnt` need to be mounted first?, just in case I put it first.
       ansible.posix.mount:
         src: "/dev/mapper/{{ luks_device_name }}"
         path: /mnt
         fstype: ext4
         state: mounted
-    - name: Disk - Mount the boot partition to `/mnt/boot`
+    - name: Disk - Mount the `boot` partition to `/mnt/boot`
       ansible.posix.mount:
         src: "{{ installation_block_device_name }}{{ boot_partition_number }}"
         path: /mnt/boot
