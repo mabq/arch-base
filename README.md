@@ -157,3 +157,5 @@ For laptops with old nvidia cards do the following (more info [here](https://ubu
   ```
 
 - Reboot
+
+  You can check what driver is controlling each device with `lspci -k`.
