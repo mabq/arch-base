@@ -52,9 +52,9 @@ It fails with disk encryption enabled, but more importantly with Ansible you are
 
    - Run the `lsblk` command to identify the target disk for the installation.
 
-   - Optionally, securely erase disk data by writing zeros on the entire disk:
+   - Optionally, securely erase all data on disk:
 
-     > You will need to do this to remove all LVM data (if it exist).
+     > Do this if you get any errors about previous LVM logical volumes.
 
      ```bash
      # For SSDs (super fast):
