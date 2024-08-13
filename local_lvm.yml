@@ -1,8 +1,10 @@
 # --- Important!
 #
 #     Some tasks in this playbook use the `ansible.builtin.command` module
-#     instead of the specialized module for that given task. The specialized
-#     module would affect the Live Environment, not the actual installation.
+#     instead of the specialized module for that given task, this is because
+#     the specialized module would affect the Live Environment, not the actual
+#     installation. For example, the `ansible.builtin.user` module would create
+#     the given user in the Live Environment, not the actual installation.
 
 - hosts: all
   tasks:
@@ -113,8 +115,8 @@
             number: "{{ main_partition_number }}"
             part_start: 1536MB
             name: main
-            # flags: (none)
-            fs_type: ext4
+            flags: [lvm]
+            # fs_type: (format is applied to the logical volumes, not the partition)
             state: present
 
     - name: Create disk partitions for BIOS systems
@@ -126,8 +128,8 @@
             label: msdos
             number: "{{ boot_partition_number }}"
             part_end: 1024MB
-            flags: [boot]
             fs_type: ext4
+            flags: [boot]
             state: present
         - name: Disk - Create main partition (BIOS)
           community.general.parted:
@@ -135,8 +137,8 @@
             label: msdos
             number: "{{ main_partition_number }}"
             part_start: 1024MB
-            # flags: (none)
-            fs_type: ext4
+            # fs_type: (format is applied to the logical volumes, not the partition)
+            flags: [lvm]
             state: present
 
     - name: Disk - Encrypt main partition
@@ -151,6 +153,40 @@
         name: "{{ luks_device_name }}"
         passphrase: "{{ encryption_password }}"
 
+    - name: LVM
+      block:
+        # Logical Volume Manager (LVM) is a storage management solution that
+        # provides a more flexible way to manage disk space compared to
+        # traditional partitioning.
+        #   - Physical Volumes (PVs): The raw storage devices or partitions
+        #     initialized for LVM use.
+        #   - Volume Groups (VGs): Pools of storage created from one or more
+        #     PVs, providing a single storage resource.
+        #   - Logical Volumes (LVs): Virtual block devices created from the
+        #     space within a VG, used to store data and create file systems.
+        - name: LVM - Create the volume group
+          community.general.lvg:
+            # Comma separated list of partitions. Listed partitions will
+            # be automatically initialized as physical volumes for this
+            # volume group. The volume group will consist of just the
+            # main partition.
+            pvs: ["/dev/mapper/{{ luks_device_name }}"]
+            vg: "{{ lvm_vg_name }}"
+            state: active
+        - name: LVM - Create 'root' logical volume
+          community.general.lvol:
+            vg: "{{ lvm_vg_name }}"
+            lv: root
+            size: "{{ space_for_system_files_in_gb }}G"
+            active: true
+        - name: LVM - Create 'home' logical volume
+          community.general.lvol:
+            vg: "{{ lvm_vg_name }}"
+            lv: home
+            # use all remaining space for user files
+            size: +100%FREE
+            active: true
+
     - name: Disk - Format EFI partition (UEFI only)
       when: firmware == 'uefi'
       community.general.filesystem:
@@ -161,13 +197,21 @@
       community.general.filesystem:
         dev: "{{ installation_block_device_name }}{{ boot_partition_number }}"
         fstype: ext4
-    - name: Disk - Format main partition
+    - name: Disk - Format `root` LVM logical volume
       community.general.filesystem:
-        dev: "/dev/mapper/{{ luks_device_name }}"
+        dev: "/dev/{{ lvm_vg_name }}/root"
+        fstype: ext4
+    - name: Disk - Format `home` LVM logical volume
+      community.general.filesystem:
+        dev: "/dev/{{ lvm_vg_name }}/home"
         fstype: ext4
 
-    # This directory is created in the filesystem of the live environment,
+    # These directories are created in the filesystem of the live environment,
     # which is running completely from memory.
+    - name: Disk - Create directory for '/home'
+      ansible.builtin.file:
+        path: /mnt/home
+        state: directory
     - name: Disk - Create directory for '/boot'
       ansible.builtin.file:
         path: /mnt/boot
@@ -178,8 +222,14 @@
     - name: Disk - Mount the `root` logical volume to `/mnt`
       # Does `/mnt` need to be mounted first?, just in case I put it first.
       ansible.posix.mount:
-        src: "/dev/mapper/{{ luks_device_name }}"
+        src: "/dev/{{ lvm_vg_name }}/root"
         path: /mnt
+        fstype: ext4
+        state: mounted
+    - name: Disk - Mount the `home` logical volumen to `/mnt/home`
+      ansible.posix.mount:
+        src: "/dev/{{ lvm_vg_name }}/home"
+        path: /mnt/home
         fstype: ext4
         state: mounted
     - name: Disk - Mount the boot partition to `/mnt/boot`
@@ -197,7 +247,8 @@
       # `linux`             # The Linux kernel and modules
       # `linux-firmware`    # Firmware files for Linux
       # `grub`              # GNU GRand Unified Bootloader (2)
-      ansible.builtin.command: pacstrap /mnt base base-devel linux linux-firmware grub
+      # `lvm2`              # Logical Volume Manager 2 utilities
+      ansible.builtin.command: pacstrap /mnt base base-devel linux linux-firmware grub lvm2
 
     - name: Install essential tools
       # `networkmanager`    # Network connection manager and user applications
@@ -218,7 +269,7 @@
     - name: fstab
       # The fstab file contains information about the partitions that should be
       # automatically mounted on system boot.
-      # All currently mounted partitions will be included, that is why we have
+      # All currently mounted partitions will be included - that is why we have
       # not mount the EFI partition yet.
       block:
         - name: Config fstab - create '/etc' directory
@@ -327,7 +378,8 @@
 
     #     The initramfs is a temporary filesystem that is loaded into memory
     #     during the boot process before the real root filesystem is mounted.
-    #     We need to recreate the initramfs with support for disk encryption.
+    #     We need to recreate the initramfs with support for LVM and disk
+    #     encryption.
 
     - name: Create a key file to avoid typing the encryption password twice during boot
       block:
@@ -347,10 +399,10 @@
       loop:
         # Add the key file
         - { regex: ^FILES, line: FILES=(/crypto_keyfile.bin) }
-        # Add the `encrypt` hook
+        # Add the `encrypt` and `lvm2` hooks
         - {
             regex: ^HOOKS,
-            line: HOOKS=(base udev autodetect modconf kms keyboard keymap consolefont block encrypt filesystems fsck),
+            line: HOOKS=(base udev autodetect modconf kms keyboard keymap consolefont block encrypt lvm2 filesystems fsck),
           }
 
     - name: Initramfs - Generate the initial ramdisk image for `linux`

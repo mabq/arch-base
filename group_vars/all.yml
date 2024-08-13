@@ -36,7 +36,6 @@ password: !vault |
 
 #     Encryption password - must be encrypted, this is a public repository
 #       Used to encrypt/decrypt the disk and variables used in the arch-setup script.
-#
 encryption_password: !vault |
   $ANSIBLE_VAULT;1.1;AES256
   66363937626135333661653134623362326264333964316365373865353261323766313037326263

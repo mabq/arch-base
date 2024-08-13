@@ -27,10 +27,12 @@ It fails with disk encryption enabled, but more importantly with Ansible you are
 
 ## About this playbook
 
+> I decided not to use LVM. A single encrypted partition is all I need for my workstation. Use the `local_lvm.yml` playbook to setup LVM.
+
   - Only runs on systems booted from the Archlinux ISO.
   - Detects the firmware type and creates disk partitions accordingly.
       - Encrypts the main partition with LUKS.
-      - Sets up LVM on the main partition with two logical volumes; one for `/` and one for `/home`.
+      <!-- - Sets up LVM on the main partition with two logical volumes; one for `/` and one for `/home`. -->
       - Enables TRIM support if supported by disk.
   - Installs only basic packages plus a few required packages to run the `arch-setup` playbook later on.
   - Does not configure the system, configuration is done on the `arch-setup` playbook.
@@ -52,7 +54,7 @@ It fails with disk encryption enabled, but more importantly with Ansible you are
 
    - Optionally, securely erase disk data by writing zeros on the entire disk:
 
-     > You will need to do this to remove all lvm (if it exist).
+     > You will need to do this to remove all LVM data (if it exist).
 
      ```bash
      # For SSDs (super fast):
@@ -103,7 +105,7 @@ It fails with disk encryption enabled, but more importantly with Ansible you are
 
      When prompted, enter the password for the root user of the managed node (the one you just setup).
 
-     Wait for the playbook to execute, if no errors occur the managed node will shutdown automatically after a successful installation.
+   - Wait for the playbook to execute, if no errors occur the managed node will shutdown automatically after a successful installation.
 
    - Remove install media and turn it back on.
 
@@ -127,9 +129,9 @@ Then, you can create encrypted the variables with the following command:
 Copy the encrypted output and paste it in `/group_vars/all.yml` or in the corresponding `host_vars/{HOSTNAME}.yml`.
 
 
-## Correct macbook flickering issues
+## Correct MacBook flickering issue
 
-> Solution found [here](https://ubuntuforums.org/showthread.php?t=2498385).
+For laptops with old nvidia cards do the following (more info [here](https://ubuntuforums.org/showthread.php?t=2498385)):
 
 - Edit the GRUB config file:
 
@@ -138,7 +140,14 @@ Copy the encrypted output and paste it in `/group_vars/all.yml` or in the corres
   sudo nvim /etc/default/grub
   ```
  
-  Add the option `nouveau.NvMXMDCB=0` to the `GRUB_CMDLINE_LINUX_DEFAULT` variable.
+  Make sure the following variable contains the following option (there will be other values):
+
+  ```bash
+  # grub will pass this parameter to the Linux kernel during boot, the noveau
+  # driver is part of the linux kernel.
+  GRUB_CMDLINE_LINUX_DEFAULT="nouveau.NvMXMDCB=0"
+  ```
+
   Save and close the file.
 
 - Re-build grub:
