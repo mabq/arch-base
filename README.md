@@ -127,35 +127,3 @@ Then, you can create encrypted the variables with the following command:
    ```
 
 Copy the encrypted output and paste it in `/group_vars/all.yml` or in the corresponding `host_vars/{HOSTNAME}.yml`.
-
-
-## Correct MacBook flickering issue
-
-For laptops with old nvidia cards do the following (more info [here](https://ubuntuforums.org/showthread.php?t=2498385)):
-
-- Edit the GRUB config file:
-
-  ```bash
-  # open the file
-  sudo nvim /etc/default/grub
-  ```
- 
-  Make sure the following variable contains the following option (there will be other values):
-
-  ```bash
-  # grub will pass this parameter to the Linux kernel during boot, the noveau
-  # driver is part of the linux kernel.
-  GRUB_CMDLINE_LINUX_DEFAULT="nouveau.NvMXMDCB=0"
-  ```
-
-  Save and close the file.
-
-- Re-build grub:
-
-  ```bash
-  sudo grub-mkconfig -o /boot/grub/grub.cfg
-  ```
-
-- Reboot
-
-  You can check what driver is controlling each device with `lspci -k`.
