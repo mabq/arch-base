@@ -54,14 +54,14 @@ It fails with disk encryption enabled, but more importantly with Ansible you are
 
    - Optionally, securely erase all data on disk:
 
-     > Do this if you get any errors about previous LVM logical volumes.
+     > This is recommended to avoid any errors, on SSD if super fast, on normal hard drives it will take a while.
 
      ```bash
-     # For SSDs (super fast):
+     # SSDs:
      hdparm --user-master u --security-set-pass p /dev/sd{X}
      hdparm --user-master u --security-erase p /dev/sd{X}
 
-     # For spinning drives (super slow):
+     # Normal HDD:
      sudo dd if=/dev/zero of=/dev/sd{X} bs=4M status=progress
      ```
 
