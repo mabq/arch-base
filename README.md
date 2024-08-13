@@ -50,15 +50,9 @@ It fails with disk encryption enabled, but more importantly with Ansible you are
 
    - Run the `lsblk` command to identify the target disk for the installation.
 
-   - Format the target disk to remove all previous partitions and LVM logical volumes.
-
-     This step avoids errors while creating new logical volumes.
-
-     ```bash
-     mkfs.exfat /dev/sd{X}
-     ```
-
    - Optionally, securely erase disk data by writing zeros on the entire disk:
+
+     > You will need to do this to remove all lvm (if it exist).
 
      ```bash
      # For SSDs (super fast):
@@ -131,3 +125,26 @@ Then, you can create encrypted the variables with the following command:
    ```
 
 Copy the encrypted output and paste it in `/group_vars/all.yml` or in the corresponding `host_vars/{HOSTNAME}.yml`.
+
+
+## Correct macbook flickering issues
+
+- Edit the GRUB config file:
+
+  ```bash
+  # open the file
+  sudo nvim /etc/default/grub
+  ```
+ 
+  Add the option `nouveau.NvMXMDCB=0` to the `GRUB_CMDLINE_LINUX_DEFAULT` variable. Save and close the file.
+
+- Re-build grub:
+
+  ```bash
+  sudo grub-mkconfig -o /boot/grub/grub.cfg
+  ```
+
+- Reboot
+
+
+
