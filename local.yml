@@ -179,7 +179,7 @@
 
     # Here we mount the physical devices to the corresponding directories of
     # the live environment file system.
-    - name: Disk - Mount the `root` partition to `/mnt`
+    - name: Disk - Mount the encrypted partition to `/mnt`
       # Does `/mnt` need to be mounted first?, just in case I put it first.
       ansible.posix.mount:
         src: "/dev/mapper/{{ luks_device_name }}"
