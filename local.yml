@@ -53,24 +53,26 @@
       ansible.builtin.set_fact:
         efi_partition_number: "{{ (firmware == 'uefi') | ternary('1', None) }}"
         boot_partition_number: "{{ (firmware == 'uefi') | ternary('2', '1') }}"
-        main_partition_number: "{{ (firmware == 'uefi') | ternary('3', '2') }}"
+        root_partition_number: "{{ (firmware == 'uefi') | ternary('3', '2') }}"
     - name: Prepend with "p" for disks names that end with a number
       # `https://wiki.archlinux.org/title/Device_file#Partition`
       when: device_name_descriptor | regex_search('[0-9]$')
       ansible.builtin.set_fact:
         efi_partition_number: "p{{ efi_partition_number }}"
         boot_partition_number: "p{{ boot_partition_number }}"
-        main_partition_number: "p{{ main_partition_number }}"
+        root_partition_number: "p{{ root_partition_number }}"
     - name: Print info
       ansible.builtin.debug:
-        msg: "efi_partition_number = {{ efi_partition_number }}, boot_partition_number = {{ boot_partition_number }}, main_partition_number = {{ main_partition_number }}"
+        msg: "efi_partition_number = {{ efi_partition_number }}, boot_partition_number = {{ boot_partition_number }}, root_partition_number = {{ root_partition_number }}"
 
     # --- Disk configuration ---------------------------------------------------
 
     - name: Disk - Remove all partitions from disk
       block:
         - name: Disk - Read device information (always use unit when probing)
-          community.general.parted: "device={{ installation_block_device_name }} unit=MiB"
+          community.general.parted:
+            device: "{{ installation_block_device_name }}"
+            unit: "MiB"
           register: partitions_info
         - name: Remove all partitions from disk
           community.general.parted:
@@ -80,22 +82,22 @@
           loop: "{{ partitions_info.partitions }}"
           ignore_errors: true
 
-    - name: Create disk partitions for UEFI systems
+    - name: Disk UEFI - Create partitions
       when: firmware == 'uefi'
       block:
-        - name: Disk - Create EFI partition (UEFI)
+        - name: Disk UEFI - Create EFI partition
           # To boot from a disk using UEFI, an EFI system partition is required.
           community.general.parted:
             device: "{{ installation_block_device_name }}"
             label: gpt
             number: "{{ efi_partition_number }}"
             part_end: 512MB
-            name: EFI
+            name: uefi
+            # https://wiki.archlinux.org/title/EFI_system_partition#GPT_partitioned_disks
             flags: [esp]
-            # flags: [boot, esp] # https://wiki.archlinux.org/title/EFI_system_partition#GPT_partitioned_disks
             fs_type: fat32
             state: present
-        - name: Disk - Create boot partition (UEFI)
+        - name: Disk UEFI - Create boot partition
           community.general.parted:
             device: "{{ installation_block_device_name }}"
             label: gpt
@@ -106,21 +108,21 @@
             # flags: (none)
             fs_type: ext4
             state: present
-        - name: Disk - Create main partition (UEFI)
+        - name: Disk UEFI - Create main partition
           community.general.parted:
             device: "{{ installation_block_device_name }}"
             label: gpt
-            number: "{{ main_partition_number }}"
+            number: "{{ root_partition_number }}"
             part_start: 1536MB
             name: main
             # flags: (none)
             fs_type: ext4
             state: present
 
-    - name: Create disk partitions for BIOS systems
+    - name: Disk BIOS - Create partitions
       when: firmware == 'bios'
       block:
-        - name: Disk - Create boot partition (BIOS)
+        - name: Disk BIOS - Create boot partition
           community.general.parted:
             device: "{{ installation_block_device_name }}"
             label: msdos
@@ -129,11 +131,11 @@
             flags: [boot]
             fs_type: ext4
             state: present
-        - name: Disk - Create main partition (BIOS)
+        - name: Disk BIOS - Create main partition
           community.general.parted:
             device: "{{ installation_block_device_name }}"
             label: msdos
-            number: "{{ main_partition_number }}"
+            number: "{{ root_partition_number }}"
             part_start: 1024MB
             # flags: (none)
             fs_type: ext4
@@ -144,12 +146,13 @@
       # device is stolen and someone has physical access to the disk. Once
       # the system is booted, it does not provice any security.
       community.crypto.luks_device:
-        device: "{{ installation_block_device_name }}{{ main_partition_number }}"
+        device: "{{ installation_block_device_name }}{{ root_partition_number }}"
         type: luks2
         new_passphrase: "{{ encryption_password }}"
+        # Unlock the container
         state: opened
-        name: "{{ luks_device_name }}"
         passphrase: "{{ encryption_password }}"
+        name: "{{ luks_device_name }}"
 
     - name: Disk - Format EFI partition (UEFI only)
       when: firmware == 'uefi'
@@ -157,21 +160,24 @@
         dev: "{{ installation_block_device_name }}{{ efi_partition_number }}"
         fstype: vfat
         opts: "-F32"
+        force: true
     - name: Disk - Format boot partition
       community.general.filesystem:
         dev: "{{ installation_block_device_name }}{{ boot_partition_number }}"
         fstype: ext4
+        force: true
     - name: Disk - Format main partition
       community.general.filesystem:
         dev: "/dev/mapper/{{ luks_device_name }}"
         fstype: ext4
+        force: true
 
     # These directories are created in the filesystem of the live environment,
     # which is running completely from memory.
-    - name: Disk - Create directory for '/home'
-      ansible.builtin.file:
-        path: /mnt/home
-        state: directory
+    # - name: Disk - Create directory for '/home'
+    #   ansible.builtin.file:
+    #     path: /mnt/home
+    #     state: directory
     - name: Disk - Create directory for '/boot'
       ansible.builtin.file:
         path: /mnt/boot
@@ -179,8 +185,7 @@
 
     # Here we mount the physical devices to the corresponding directories of
     # the live environment file system.
-    - name: Disk - Mount the encrypted partition to `/mnt`
-      # Does `/mnt` need to be mounted first?, just in case I put it first.
+    - name: Disk - Mount root partition to `/mnt`
       ansible.posix.mount:
         src: "/dev/mapper/{{ luks_device_name }}"
         path: /mnt
@@ -338,7 +343,7 @@
         - name: Initramfs - Create an empty file
           ansible.builtin.shell: arch-chroot /mnt dd bs=512 count=4 if=/dev/urandom of=/crypto_keyfile.bin
         - name: Initramfs - Append the encryption key to it
-          ansible.builtin.shell: echo "{{ encryption_password }}" | arch-chroot /mnt  cryptsetup luksAddKey {{ installation_block_device_name }}{{ main_partition_number }} /crypto_keyfile.bin -
+          ansible.builtin.shell: echo "{{ encryption_password }}" | arch-chroot /mnt  cryptsetup luksAddKey {{ installation_block_device_name }}{{ root_partition_number }} /crypto_keyfile.bin -
         - name: Initramfs - Remove all permissions for security reasons
           ansible.builtin.command: arch-chroot /mnt chmod 000 /crypto_keyfile.bin
 
@@ -398,7 +403,7 @@
         # Enable TRIM (if supported) and encryption
         - {
             regex: ^GRUB_CMDLINE_LINUX="",
-            line: 'GRUB_CMDLINE_LINUX="{{ disk_discard_support | ternary(''cryptdevice={{ installation_block_device_name }}{{ main_partition_number }}:{{ luks_device_name }}:allow-discards'', ''cryptdevice={{ installation_block_device_name }}{{ main_partition_number }}:{{ luks_device_name }}'') }}"',
+            line: 'GRUB_CMDLINE_LINUX="{{ disk_discard_support | ternary(''cryptdevice={{ installation_block_device_name }}{{ root_partition_number }}:{{ luks_device_name }}:allow-discards'', ''cryptdevice={{ installation_block_device_name }}{{ root_partition_number }}:{{ luks_device_name }}'') }}"',
           }
 
     - name: Bootloader - Generate the GRUB configuration file

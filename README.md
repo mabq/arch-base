@@ -27,12 +27,11 @@ It fails with disk encryption enabled, but more importantly with Ansible you are
 
 ## About this playbook
 
-> I decided not to use LVM. A single encrypted partition is all I need for my workstation. Use the `local_lvm.yml` playbook to setup LVM.
+> I decided not to use LVM. Logical volume data remained even after deleting the partitions, forcing me to securely wipe the disk before running this playbook. For my workstations I really don't need LVM anyway. Check the `local_lvm` playbook if you ever need to implement that again.
 
   - Only runs on systems booted from the Archlinux ISO.
   - Detects the firmware type and creates disk partitions accordingly.
       - Encrypts the main partition with LUKS.
-      <!-- - Sets up LVM on the main partition with two logical volumes; one for `/` and one for `/home`. -->
       - Enables TRIM support if supported by disk.
   - Installs only basic packages plus a few required packages to run the `arch-setup` playbook later on.
   - Does not configure the system, configuration is done on the `arch-setup` playbook.
@@ -46,40 +45,28 @@ It fails with disk encryption enabled, but more importantly with Ansible you are
 
 ## How to run this playbook?
 
-1. On the **managed node** (where you want to install Archlinux):
+1. Download the Arch ISO.
 
-   - Boot from the [installation image](https://archlinux.org/download/). Visit the [installation guide](https://wiki.archlinux.org/title/Installation_guide) for more information.
+   - Head to [Arch Linux's official website](https://www.archlinux.org/download/) and download the Arch ISO image.
 
-   - Run the `lsblk` command to identify the target disk for the installation.
+   - Execute `cp -v {path/to/ISO} /dev/{disk}` to copy it to your USB drive.
 
-   - Optionally, [securely erase](https://wiki.archlinux.org/title/Securely_wipe_disk) all data on disk:
+2. On the **managed node** (the computer where Archlinux will be installed):
 
-     > This is recommended to avoid any errors, on SSD if super fast, on normal hard drives it will take a while.
+   - Connect the USB drive and boot from the Arch Linux ISO.
 
-     ```bash
-     # SSDs:
-     hdparm --user-master u --security-set-pass p /dev/sd{X}
-     hdparm --user-master u --security-erase p /dev/sd{X}
+   - Connect to the internet. A wired connection is preferred since it's easier to connect. [More info](https://wiki.archlinux.org/index.php/Installation_guide#Connect_to_the_internet).
 
-     # Normal HDD:
-     sudo dd if=/dev/zero of=/dev/sd{X} bs=4M status=progress
-     ```
+   - Execute `passwd` to change the root password -- use `1`.
 
-   - Change the root password:
+   - Execute `ip a` and annotate the IP address.
 
-     ```bash
-     passwd
-     # Use a simple password, its only temporary.
-     ```
+   - Execute `lsblk` or `fdisk --list` to identify the target disk.
 
-   - Annotate the IP address:
+   - Optionally, [securely wipe disk](https://wiki.archlinux.org/title/Securely_wipe_disk).
 
-     ```bash
-     # Use `iwctl` if you need to connect to a wireless network.
-     ip a
-     ```
 
-2. On the **controller node**:
+3. On the **controller node**:
 
    - Clone this repository (if already cloned, make sure to commit all changes):
 
