@@ -9,10 +9,6 @@
 #     Do not edit these variables here, these are the default values, overwrite
 #     them in the corresponding `host_vars/{HOSTNAME}.yml` file.
 
-#     Size for the system logical volume, user files will be stored on another
-#     logical volume (remainder space).
-space_for_system_files_in_gb: 32
-
 #     Use 0 for no swap or a multiple of 1024.
 swap_size_in_mb: 4096
 
@@ -23,7 +19,13 @@ disable_root_login: true
 luks_device_name: crypt
 
 #     Name for the LVM volume group
-lvm_vg_name: lvm
+#     (this variable was used with the lvm setup, it not used anymore)
+# lvm_vg_name: lvm
+
+#     Size for the system logical volume, user files will be stored on another
+#     logical volume (remainder space).
+#     (this variable was used with the lvm setup, it not used anymore)
+# space_for_system_files_in_gb: 32
 
 #     User password - must be encrypted, this is a public repository
 password: !vault |
